@@ -1,0 +1,2732 @@
+USR: An Unsupervised and Reference Free Evaluation Metric for Dialog
+Generation
+Shikib Mehri and Maxine Eskenazi
+Dialog Research Center, Language Technologies Institute
+Carnegie Mellon University, USA
+{amehri,max}@cs.cmu.edu
+
+arXiv:2005.00456v1 [cs.CL] 1 May 2020
+
+Abstract
+The lack of meaningful automatic evaluation
+metrics for dialog has impeded open-domain
+dialog research. Standard language generation metrics have been shown to be ineffective for evaluating dialog models. To this end,
+this paper presents USR, an UnSupervised and
+Reference-free evaluation metric for dialog.
+USR is a reference-free metric that trains unsupervised models to measure several desirable qualities of dialog. USR is shown to
+strongly correlate with human judgment on
+both Topical-Chat (turn-level: 0.42, systemlevel: 1.0) and PersonaChat (turn-level: 0.48
+and system-level: 1.0). USR additionally produces interpretable measures for several desirable properties of dialog.
+
+1
+
+Introduction
+
+The lack of meaningful automatic evaluation metrics is a significant impediment for open-domain
+dialog generation research. Standard language generation metrics have been shown to be ineffective for dialog evaluation (Deriu et al., 2019; Liu
+et al., 2016). Without well-accepted, meaningful
+automatic metrics, open-domain dialog researchers
+have come to rely on human evaluation. Due to
+its time- and cost-intensive nature, human evaluation is typically only used for the final dialog
+model. As such, during development dialog systems are generally optimized for poorly-correlated
+automatic metrics (e.g., F-1, BLEU, PPL) which
+can result in sub-par human evaluation scores (Dinan et al., 2019). To facilitate development of opendomain dialog models with meaningful automatic
+metrics, this paper presents the UnSupervised and
+Reference free (USR) evaluation metric for dialog.
+Standard automatic metrics for evaluating dialog
+generation (e.g., BLEU, F-1, METEOR, ROUGE)
+have several shortcomings that make them unsuitable for dialog evaluation: (1) The one-to-many
+
+nature of dialog (Zhao et al., 2017) makes wordoverlap metrics ineffective for scoring valid system
+output that deviates from the ground-truth response
+(Liu et al., 2016; Gupta et al., 2019). (2) Human
+evaluation of dialog typically measures multiple
+properties (e.g., appropriate, interesting, consistent). Automatic metrics on the other hand, condense the multi-faceted nature of dialog quality
+to a single uninterpretable metric. (3) There are
+many definitions of what a good dialog is and, as
+such, it is not feasible to construct a “one size fits
+all” metric. Depending on the task and the data,
+the desired qualities of a dialog system may differ
+(Walker et al., 1997; Deriu et al., 2019).
+USR is a reference-free metric that consists of
+several interpretable sub-metrics which are combined in a configurable manner. Rather than relying
+on a ground-truth reference response, unsupervised
+models are trained to measure desired qualities of
+dialog (e.g., interesting, natural). As such, USR
+(1) alleviates the one-to-many issue of standard
+metrics, (2) produces interpretable measures for
+desirable properties of dialog, and (3) provides a
+configurable mechanism for combining several submetrics into an overall quality score.
+To evaluate the performance of USR, human
+quality annotations were collected for models
+trained on the Topical-Chat (Gopalakrishnan et al.,
+2019) and the PersonaChat corpora (Zhang et al.,
+2018). USR is shown to strongly correlate with
+human judgment on both Topical-Chat (turn-level
+Spearman: 0.42, system-level Spearman: 1.0)
+and PersonaChat (turn-level Spearman: 0.48 and
+system-level Spearman: 1.0). The strong correlation with human judgment across two datasets
+and a variety of model types shows that USR is a
+valuable tool for the dialog community. Further,
+since USR does not require any explicit supervision, it has the potential to generalize to several
+dialog tasks and datasets.
+
+The contributions of this paper as as follows: (1)
+a strongly-correlated, unsupervised and reference
+free metric is proposed for evaluating open-domain
+dialog systems, (2) a thorough human quality annotation is carried out and is released1 to facilitate
+future benchmarking of dialog evaluation metrics.
+
+2
+
+Related Work
+
+Standard automatic metrics for language generation
+correlate poorly with human judgement of dialog
+(Liu et al., 2016; Lowe et al., 2017; Gupta et al.,
+2019). For example, the F-1 score can be gamed
+by outputting the most frequent words, regardless
+of the context (Dinan et al., 2019).
+The poor performance of present metrics is
+largely due to the one-to-many nature of dialog
+(Zhao et al., 2017). To avoid comparing to a single
+reference response, several authors have proposed
+using multiple reference responses. Multiple reference responses can be obtained with retrieval
+models (Galley et al., 2015; Sordoni et al., 2015) or
+through data collection (Gupta et al., 2019). These
+multi-reference metrics show improvement in performance, but it is infeasible to thoroughly cover
+the space of potential responses. As such, this paper addresses the one-to-many issue of dialog by
+presenting a reference-free metric.
+Lowe et al. (2017) train ADEM to produce a
+quality score conditioned on the dialog context,
+the reference response and the generated response.
+Venkatesh et al. (2018) present a framework for
+evaluation of Alexa prize conversations, which attains moderate correlation with user ratings. Both
+of these methods are trained on explicit quality annotations. In contrast, USR requires no explicit
+supervision and will more easily generalize to new
+datasets and tasks.
+Li et al. (2017) proposes a reference-free dialog evaluator which is trained to discriminate between human and generated responses. This work
+is similar to USR in that it evaluates the quality
+of a response without a reference or quality annotation training data. Using the evaluation model
+as a reward during reinforcement learning exhibited strong performance. However, correlation with
+human judgement was not evaluated. Intuitively,
+it appears insufficient to rely on a discriminator
+as a meaningful evaluation of dialog since this assumes that all human responses are perfect and all
+generated responses are imperfect.
+1
+
+http://shikib.com/usr
+
+3
+
+Human Quality Annotation
+
+To evaluate the correlation of automatic metrics
+with human judgment, human quality annotation
+was carried out across two open-domain dialog
+corpora. Generated responses were obtained from
+several models described in Section 3.3. For each
+dialog context, an additional human response was
+also written. Human annotation was then carried
+out on sixty dialog contexts, with six responses
+per context for Topical-Chat (four system outputs,
+one newly-annotated human output, one original
+ground-truth response) and five for PersonaChat
+(one less system output). Each response was given
+six different scores: Understandable (0-1), Natural (1-3), Maintains Context (1-3), Interesting (13), Uses Knowledge (0-1), Overall Quality (1-5).
+Three annotators labeled each response.
+The task instructions were very detailed in order
+to minimize subjectivity in the quality annotations.
+For example, individuals may differ in their definition of Interesting (e.g., some individuals find
+football interesting, others do not). Thus, the instructions contained a clear, albeit somewhat rigid
+definition, of Interesting. The instructions for Overall Quality annotation, however, were less rigid and
+therefore those annotations contain some amount
+of annotator-specific subjectivity.
+The data collection and experiments with PersonaChat were carried out to assess the generality of the USR metric. As such, the annotation
+questions used were specifically tailored to TopicalChat, but are still suitable for PersonaChat.
+3.1
+
+Topical-Chat Dataset
+
+The Topical-Chat dataset (Gopalakrishnan et al.,
+2019) is a large collection of human-human
+knowledge-grounded open-domain conversations
+that consists of 11,319 dialogs and 248,014 utterances. Following the same experimental setup as
+Gopalakrishnan et al. (2019), heuristics are employed to identify the most relevant fact for each
+response. As such, the task is to produce a response
+conditioned on both a dialog context and a fact.
+3.2
+
+PersonaChat Dataset
+
+The PersonaChat dataset (Zhang et al., 2018) is
+a corpus of human-human persona-conditioned
+conversations that consists of 10,907 dialogs and
+162,064 utterances. Each worker is asked to condition their responses on a persona, which we consider to be analogous to the facts in the Topical-
+
+A fourth open-source model was also used to
+produce output for quality annotation, however it
+was ultimately excluded from the released dataset
+and experiments due to possible data leakage.
+3.4
+
+Figure 1: On the Topical-Chat corpus, six responses are
+obtained for each dialog context. Four use the trained
+Transformer model with different decoding strategies.
+One is a new human-generated response. One is the
+original ground-truth. A similar setup was employed
+for PersonaChat, albeit with different models.
+
+Chat corpus.
+3.3
+3.3.1
+
+Models
+Topical-Chat Models
+
+A Transformer (Vaswani et al., 2017) is trained to
+produce the response, r, conditioned on dialog context, c, and fact, f . The input to the transformer is
+the concatenation of c and f , similar to Gopalakrishnan et al. (2019). The transformer consists of 6
+layers, a hidden size of 512, randomly-initialized
+word embeddings of size 300, a dropout rate of 0.1
+and it is trained for 50 epochs.
+A single Transformer model is trained, which
+matches the automatic metrics reported by
+Gopalakrishnan et al. (2019). Different decoding
+strategies are used to obtain four different outputs
+from this model. In addition to standard argmax
+sampling, nucleus sampling (Holtzman et al., 2019)
+is used at three different rates: p = {0.3, 0.5, 0.7}.
+The outputs from these four decoding strategies are
+listed with the original ground-truth utterance and
+a new human-generated response, for a total of six
+responses for each context, as shown in Figure 1.
+3.3.2
+
+PersonaChat Models
+
+Three models were used to generate system outputs: a sequence-to-sequence model (Seq2Seq),
+an LSTM language model (LM) and a Key-Value
+Profile Memory Network (KV-MemNN). We use
+the pre-trained models provided in ParlAI2 for the
+ConvAI2 competition (Dinan et al., 2019).
+2
+https://github.com/facebookresearch/
+ParlAI/tree/master/projects/convai2
+
+Annotation
+
+Quality annotation was performed by six dialog
+researchers. Using a crowdsourcing platform, such
+as Amazon Mechanical Turk (AMT), would have
+allowed for more efficient and scalable annotation.
+However, crowdsourcing was not used because (1)
+the annotation instructions are lengthy, (2) a preliminary annotation pass was carried out, followed
+by a group discussion, (3) having many annotations from a few annotators allows examination of
+annotator-specific subjectivity.
+Annotators were provided with a set of instructions (Appendix A). A small preliminary annotation pass was carried out, with each individual annotating 5 dialog contexts (for a total of 30 responses). The inter-annotator agreement was computed for each of the questions. The instructions
+were refined after the preliminary pass and a discussion meeting (e.g., Maintains Context was changed
+to be a 3-point rating instead of a 2-point rating).
+After the instructions were modified, the full annotation pass was carried out.
+Each response was rated according to the qualities mentioned at the beginning of this section.
+Instructions for each of qualities are summarized
+below:
+• Understandable (0 - 1): Is the response understandable given the previous context?
+• Natural (1 - 3): Does the response seem to be
+something that a person would naturally say?
+• Maintains Context (1 - 3): Does the response
+serve as a valid continuation of the preceding
+conversation?
+• Interesting (1 - 3): Is the response dull or
+interesting?
+• Uses Knowledge (0 - 1): Given the fact that
+the response is conditioned on, how well does
+the response use that fact?
+• Overall Quality (1 - 5): Given your answers
+above, what is your overall impression of the
+quality of this utterance?
+
+Metric
+
+Spearman
+Topical-Chat
+Understandable
+0.5102
+Natural
+0.4871
+Maintains Context
+0.5599
+Interesting
+0.5811
+Uses Knowledge
+0.7090
+Overall Quality
+0.7183
+PersonaChat
+Understandable
+0.2984
+Natural
+0.4842
+Maintains Context
+0.6125
+Interesting
+0.4318
+Uses Knowledge
+0.8115
+Overall Quality
+0.6577
+
+Pearson
+0.5102
+0.4864
+0.5575
+0.5754
+0.7090
+0.7096
+0.2984
+0.4716
+0.6130
+0.4288
+0.8115
+0.6603
+
+Table 1: Inter-annotator agreement for all the metrics. For all the correlations presented in this table,
+p < 0.01.
+
+The instructions contained detailed descriptions
+and examples of what constitutes a response in
+each category (e.g., what makes a response score
+2 on Maintains Context). These instructions were
+written to minimize subjectivity in the annotations,
+which results in clear, agreed upon definitions.
+For Topical-Chat, the full annotation consisted
+of 60 dialog contexts randomly sampled from the
+frequent test set, for a total of 360 responses scored
+on six different qualities. For PersonaChat, 60
+dialog contexts were sampled from the ConvAI2
+validation set, with a total of 300 responses scored
+on six different qualities. Each response was labeled by three different annotators. Annotators
+were randomly assigned to each dialog context.
+3.5
+
+Analysis
+
+Inter-annotator agreements for the different ratings
+across both datasets are presented in Table 1. The
+correlation between each pair of annotations is computed and the average correlation over all the pairs
+is reported. Correlation is used instead of Cohen’s
+Kappa in order to better account for the ordinal
+nature of the ratings (i.e., 4 should correlate better with 5 than 1), and to maintain consistency
+with the evaluation of the automatic metrics. Most
+inter-annotator correlations are above 0.4, which
+indicates moderate to strong agreement. The low
+agreement for Understandable on PersonaChat is
+likely a consequence of the simple language in
+the dataset. Most responses are understandable,
+
+except for those requiring background knowledge
+(e.g., that ‘cod’ is an acronym for ‘Call of Duty’).
+Since the annotators have differing background
+knowledge, the few occasions where they fail to
+understand an utterance will differ, hence the lower
+agreement. The agreement for Overall Quality is
+relatively high (0.71 for Topical-Chat and 0.66 for
+PersonaChat) which suggests that any ambiguity in
+the specific dialog qualities is mitigated when the
+annotator is asked for an overall impression.
+Table 2 presents the scores for the different systems on each of the six qualities. Across both
+datasets and all qualities, the new human generated
+response strongly outperforms all other response
+types, even the original ground truth. This may be
+because the new human generated response was
+written with this quality annotation in mind, and
+as such is optimized for turn-level evaluation. On
+the other hand, the workers who produced the original ground-truth response, were more concerned
+with the quality of the overall dialog than with the
+quality of each individual response.
+On the Topical-Chat corpus, argmax decoding
+has a moderately higher performance over the nucleus sampling (Holtzman et al., 2019) methods.
+This should not be taken as an indication that
+argmax decoding is the superior method, since
+the hyperparameters (e.g., temperature) were not
+tuned for nucleus sampling. It should be noted
+that the objective was not to train and evaluate the
+best performing models, but instead to produce responses of varying qualities and obtain accurate
+human judgements of these responses.
+A regression was trained to map from the five
+ratings to the overall score in order to analyze the relationship between them. For better interpretability
+of the regression weights, the scores were normalized (using z-score) before training the regression.
+For better interpretability, a softmax was computed
+over the weights. Since individuals may differ in
+their definition of a good response, a specific regression is trained for each of the five annotators
+who labeled responses for the Topical-Chat corpus.
+Figure 2 displays the weights attributed to each of
+the five qualities by each of the annotators.
+Annotators attributed different weights to the
+specific features. For example, A3 emphasized naturalness while A2 paid more attention to whether
+a response was grounded on knowledge. Despite
+the differences across annotators, a good response
+was generally expected to be natural, maintain con-
+
+System
+
+Und (0-1)
+
+Original Ground-Truth
+Argmax Decoding
+Nucleus Sampling (0.3)
+Nucleus Sampling (0.5)
+Nucleus Sampling (0.7)
+New Human Generated
+
+0.95
+0.60
+0.51
+0.48
+0.52
+0.99
+
+Original Ground-Truth
+Language Model
+LSTM Seq2Seq
+KV-MemNN
+New Human Generated
+
+0.99
+0.97
+0.92
+0.93
+1.00
+
+Nat (1-3) MCtx (1-3)
+Topical-Chat
+2.72
+2.72
+2.08
+2.13
+2.02
+1.90
+1.92
+1.93
+2.01
+1.87
+2.92
+2.93
+PersonaChat
+2.89
+2.82
+2.63
+2.02
+2.64
+2.49
+2.70
+2.18
+2.97
+2.88
+
+Int (1-3)
+
+UK (0-1)
+
+OQ (1-5)
+
+2.64
+1.94
+1.82
+1.72
+1.80
+2.90
+
+0.72
+0.47
+0.42
+0.34
+0.37
+0.96
+
+4.25
+2.76
+2.40
+2.29
+2.39
+4.80
+
+2.67
+2.24
+2.29
+2.56
+2.87
+
+0.56
+0.08
+0.47
+0.17
+0.96
+
+4.36
+2.98
+3.47
+3.25
+4.80
+
+Table 2: Average scores for the six different responses, on the six quality: Understandable, Natural, Maintains
+Context, Interesting, Uses Knowledge and Overall Quality.
+
+4.1 describes several existing metrics that were
+studied. Section 4.2 presents USR, a novel unsupervised and reference-free metric.
+4.1
+
+Figure 2: Weight attributed to each of the five specific
+metrics by each annotator, when labeling Overall Quality. Lighter colors signify more weight.
+
+text, and be interesting. These annotator-specific
+weights demonstrate that individuals define good
+dialog differently. Future work could explore personalized dialog evaluation wherein the evaluation
+metric is tailored to a specific individual.
+A potential criticism of this quality annotation
+could be that certain dialog qualities are missing.
+To address concerns about the completeness of the
+set of five qualities, a regression can be trained
+to produce the overall score conditioned on the
+quality ratings. The Spearman correlation between
+the predicted score and the original overall score
+is 0.9654, which signifies that the set of qualities
+is thorough and contains enough information to
+reflect the overall quality of the response.
+
+4
+
+Automatic Metrics
+
+This section describes the automatic metrics explored for evaluating generated responses. Section
+
+Baseline Metrics
+
+Several existing and easily-applicable metrics for
+dialog evaluation are compared. the list of available
+metrics is not exhaustive. Only the most commonly
+used and the most accessible are addressed.
+F-1 score computes the word-overlap between
+the generated response and the ground-truth, by
+taking the harmonic mean of the precision and recall. It is one of the four metrics used by the creators of the Topical-Chat dataset (Gopalakrishnan
+et al., 2019), along with perplexity and unique unigram/bigram counts. Dinan et al. (2019) described
+a simple adversarial example that attains a high
+F-1 score on PersonaChat. We produce a similar
+example for the Topical-Chat dataset and find that
+always outputting a concatenation of the ten most
+common tokens in the dataset (“. i the , that a to it
+is of”) attains an F-1 score of 25.6 which is a +3.6
+improvement over the Transformer presented by
+Gopalakrishnan et al. (2019).
+BLEU (Papineni et al., 2002) is a well-known
+word overlap metric that computes n-gram precision between the generated sequence and the reference. Because precision favors shorter sentences,
+BLEU also adds a brevity penalty that punishes
+shorter sentences. BLEU has been found to correlate poorly with human judgment (Liu et al., 2016;
+Lowe et al., 2017; Gupta et al., 2019).
+METEOR (Denkowski and Lavie, 2014) was
+
+designed as an improvement on BLEU using a harmonic mean of precision and recall, as well as
+stemming and synonyms.
+ROUGE-L (Lin, 2004) identifies the longest
+common subsequence between the generated and
+reference sequence to better account for sentencelevel structure when computing word overlap.
+Greedy Matching (Rus and Lintean, 2012) is
+an embedding-based metric that greedily matches
+each word in the generated sequence to a reference
+word based on the cosine similarity of their embeddings. The final score is then an average over all
+the words in the generated sequence.
+Embedding Average (Wieting et al., 2015)
+computes a sentence embedding for both the generated sequence and the ground-truth response by
+taking an average of word embeddings. The score
+is then a cosine similarity of the average embedding
+for both the generated and reference sequence.
+Vector Extrema (Forgues et al., 2014) follows
+a similar setup to Embedding Average, where the
+score is the cosine similarity between sentence embeddings. Rather than taking an average over word
+embeddings, this method identifies the maximum
+value for each dimension of the word embedding.
+Taking the maximum is motivated by the idea that
+common words will be de-emphasized as they will
+be closer to the origin. Vector Extrema has been
+shown to perform better on dialog tasks than other
+metrics (Gupta et al., 2019; Liu et al., 2016).
+Skip-Thought (Kiros et al., 2015) uses a recurrent neural network to produce a sentence-level embedding for the generated and reference sequences.
+A cosine similarity is then computed between the
+two embeddings. The implementation provided by
+Sharma et al. (2017) is used.
+BERTScore (Zhang et al., 2019) uses a pretrained BERT (Devlin et al., 2018) model to greedily match each word in a reference response with
+one word in the generated sequence. By doing so,
+it computes the recall of the generated sequence.
+BERTScore was shown to have strong system-level
+and segment-level correlation with human judgment on several machine translation and captioning
+tasks. However, although it is a more sophisticated
+metric, it still compares word similarity between
+a reference and a generated sequence. While this
+method may work well for tasks where there is a
+limited space of outputs for each input (e.g., captioning, translation), it is ineffective at dealing with
+the one-to-many nature of dialog.
+
+4.2
+
+Proposed Metric
+
+This section proposes describes the USR metric,
+an unsupervised, reference-free evaluation metric
+for dialog. USR leverages pre-trained language
+models, specifically RoBERTa (Liu et al., 2019),
+to measure properties of dialog. USR is designed
+to be reference-free because there is no one right
+answer due to the inherent one-to-many nature of
+dialog (Zhao et al., 2017).
+Several sub-metrics were developed for the different qualities of dialog (e.g., Natural, Interesting,
+Uses Knowledge). While USR measures the overall quality of a response, its sub-metrics assess specific dialog qualities and therefore facilitate better
+understanding of a model’s performance.
+4.2.1 Masked Language Modelling Metric
+The masked language modelling (MLM) metric
+uses a fine-tuned RoBERTa (Liu et al., 2019) model
+to estimate the likelihood of a response. RoBERTa
+is pre-trained on a massive amount of English data
+and fine-tuned on the corpus being evaluated (either
+Topical-Chat or PersonaChat), making it capable of
+identifying unnatural and incorrect responses. The
+likelihood estimated by the fine-tuned RoBERTa
+model is used as an automatic metric for evaluating
+the understandability and naturalness of responses.
+The RoBERTa-base model (Liu et al., 2019) is
+fine-tuned on the training set of the Topical-Chat
+corpus (Gopalakrishnan et al., 2019) using the implementation open-sourced by Wolf et al. (2019a).
+The language model is fine-tuned on only the dialog, without any of the facts, for a single epoch.
+RoBERTa uses both past and future context to
+predict a probability distribution for a masked word.
+The input sequence to MLM is a concatenation of
+a dialog context, c, and a response, r. One word
+at a time, each word in r is masked and its log
+likelihood is computed. Given the masked loglikelihood for the i-th word of r as li , the value of
+P|r|
+the metric is then computed to be − i li . Figure
+3 visualizes this process.
+4.2.2 Dialog Retrieval Metrics
+Recent research has highlighted the complementary nature of dialog retrieval and generation with
+respect to multi-tasking (Wolf et al., 2019b) and
+pre-training (Mehri et al., 2019). Because of this
+complimentary nature, using dialog retrieval (DR)
+for evaluating generative models is an intuitive
+choice, especially for metrics like Maintains Context and Uses Knowledge.
+
+such, generic responses will generally be scored
+lower than other contextually relevant, interesting
+responses. The DR metrics will learn to favor responses that are unique to a given context x, rather
+than being applicable to many different contexts.
+
+Figure 3: Visualization of the masked language modelling (MLM) metric. Context words are in grey; response words are in red. The red words are masked,
+and RoBERTa must predict the likelihood of their true
+value (shown in green).
+
+The fine-tuned RoBERTa model described in
+Section 4.2.1 is further fine-tuned for the retrieval
+task. This task is set up in the same manner as
+the Ubuntu dialog corpus (Lowe et al., 2015). The
+model is trained given a context x, a response r,
+and a binary label y indicating whether r is the
+true response or randomly sampled. The context
+x may consist of the dialog history and the fact,
+denoted c, or just the fact, denoted f . Two different
+versions of the dialog retrieval (DR) metric are
+trained, with different values of x. The DR metric
+score is defined to be the probability P (y = 1| x, r)
+a given DR metric model produces.
+Though the DR metric is trained for the task of
+retrieval, this is done in an unsupervised manner.
+The retrieval task is an unsupervised task since it
+requires no additional labels during training (e.g.,
+explicit quality annotations).
+The DR metric is appropriate for Maintains Context, Interesting and Uses Knowledge. If a retrieval
+model predicts that a generated response is contextually relevant to a dialog context, it indicates
+that the response Maintains Context. Likewise, if a
+retrieval model predicts that the response r is contextually relevant to fact f , it signifies that r most
+likely Uses Knowledge.
+Interesting is the measure of whether the response is dull/generic or if it provides some interesting/engaging information. The DR metric is
+trained to distinguish between a ground-truth response (y = 1) and a randomly sampled response
+(y = 0). Generic responses are applicable to many
+contexts, and will often appear as both groundtruth responses and randomly sampled responses.
+As such, the model will likely learn to assign a low
+probability distribution to these generic responses
+and will often output P (y = 1| r, x) = 0.5. As
+
+4.2.3 The USR Metric
+Given meaningful automatic metrics for each of
+the five dialog qualities, USR combines the scores
+into an overall measure that correlates well with
+Overall Quality ratings.
+In Section 3.5, a regression model was trained
+to reproduce the overall score from each of the
+specific quality scores. The predictions of this regression model attained a 0.9654 Spearman correlation with the original scores. This same regression
+is used by USR on top of the automatic metrics
+presented in Sections 4.2.1 and 4.2.2.
+USR combines its sub-metrics into one measure
+of overall quality. This combination is configurable,
+adaptable to different datasets or tasks. For example, if a specific application prefers natural responses over interesting ones, the weights of the
+regression model can be adjusted. Analysis demonstrated that individuals used different weights when
+producing the overall score (Figure 2). USR might
+be able to be personalized for specific individuals
+by adjusting the weights of the regression model.
+
+5
+
+Results
+
+This section evaluates all of the automatic metrics described in Section 4, by comparing them
+to human judgement. The best sub-metrics for
+each dialog quality are used as input for the regression model of the USR metric. While the best performing sub-metrics are not consistent across the
+two datasets, the USR metric nonetheless exhibits
+strong results. The annotations for the original
+ground-truth are not used for evaluation, in order to
+accurately compare referenced and reference-free
+metrics.
+Table 3 shows turn-level correlations of the
+best automatic metrics for each dialog quality on
+Topical-Chat. USR is shown to strongly outperform both word-overlap and embedding-based metrics across all of the dialog qualities. Interestingly,
+the best non-USR metric is consistently either METEOR or BERTScore – possibly because both
+methods are adept at comparing synonyms during
+evaluation. For some dialog qualities, the overall
+USR metric outperforms the best sub-metric. For
+example, USR does better for Maintains Context
+
+Metric
+
+Spearman
+Understandable
+BERTScore (base)
+0.2502
+USR - MLM
+0.3268
+USR
+0.3152
+Natural
+BERTScore (base)
+0.2094
+USR - MLM
+0.3254
+USR
+0.3037
+Maintains Context
+METEOR
+0.3018
+USR - DR (x = c)
+0.3650
+USR
+0.3769
+Interesting
+BERTScore (base)
+0.4121
+USR - DR (x = c)
+0.4877
+USR
+0.4645
+Uses Knowledge
+METEOR
+0.3909
+USR - DR (x = f)
+0.4468
+USR
+0.3353
+
+Pearson
+0.2611
+0.3264
+0.2932
+0.2260
+0.3370
+0.2763
+0.2495
+0.3391
+0.4160
+0.3901
+0.3533
+0.4555
+0.3328
+0.2220
+0.3175
+
+Table 3: Turn-level correlations on Topical-Chat. We
+show: (1) best non-USR metric, (2) best USR submetric and (3) USR metric. All measures in this table
+are statistically significant to p < 0.01.
+
+than USR-DR. This is likely because the information from the other sub-metrics (e.g., Uses Knowledge) is valuable and effectively leveraged by USR.
+Table 4 reports the turn-level correlations of the
+best automatic metrics for each dialog quality on
+the PersonaChat corpus. Across all dialog qualities, USR strongly outperforms the word-overlap
+and embedding-based metrics. Conversations in
+PersonaChat generally consist of individuals communicating facts from their own persona in a relevant and coherent manner. As such, when models
+trained on PersonaChat produce subpar outputs,
+it is generally because the outputs either (1) do
+not effectively use the persona or (2) are not relevant/coherent to the dialog context. This explains
+why the correlations are significantly higher for
+Maintains Context and Uses Knowledge. As a consequence of PersonaChat’s strong dependency on
+both the dialog context and the persona, USR-DR
+(x = c) which uses both the dialog context and the
+persona to perform dialog retrieval, generally outperforms all other metrics.
+Table 5 shows turn-level correlation with the
+Overall Quality ratings on Topical-Chat, for all of
+
+Metric
+
+Spearman
+Understandable
+BERTScore (base)
+0.0685
+USR - MLM
+0.1186
+USR
+0.1324
+Natural
+VectorExtrema
+0.1375
+USR - DR (x = c)
+0.2291
+USR
+0.2430
+Maintains Context
+METEOR
+0.2564
+USR - DR (x = c)
+0.5625
+USR
+0.5280
+Interesting
+BERTScore (base)
+0.0491
+USR - DR (x = c)
+0.2634
+USR
+0.0171
+Uses Knowledge
+METEOR
+0.1719
+USR - DR (x = c)
+0.6309
+USR
+0.3177
+
+Pearson
+0.0672
+0.1313
+0.1241
+0.1458
+0.1733
+0.1862
+0.2500
+0.6021
+0.6065
+0.0325
+0.0606
+0.0315
+0.1678
+0.4508
+0.4027
+
+Table 4: Turn-level correlations on Persona-Chat. We
+show: (1) best non-USR metric, (2) best USR submetric and (3) USR metric. All values with p > 0.05
+are italicized.
+
+Metric
+
+Spearman Pearson
+Word-Overlap Metrics
+F-1
+0.1645
+0.1690
+BLEU-1
+0.2728
+0.2876
+BLEU-2
+0.2862
+0.3012
+BLEU-3
+0.2569
+0.3006
+BLEU-4
+0.2160
+0.2956
+METEOR
+0.3365
+0.3908
+ROUGE-L
+0.2745
+0.2870
+Embedding Based Metrics
+Greedy Matching
+0.1712
+0.1943
+Embedding Average
+0.1803
+0.2038
+Vector Extrema
+0.2032
+0.2091
+Skip-Thought
+0.1040
+0.1181
+BERTScore (base)
+0.3229
+0.3540
+BERTScore (large)
+0.2982
+0.3252
+Reference Free Metrics
+USR - MLM
+0.3086
+0.3345
+USR - DR (x = c)
+0.3245
+0.4068
+USR - DR (x = f)
+0.1419
+0.3221
+USR
+0.4192
+0.4220
+Table 5: Turn-level correlations between all automatic
+metrics and the Overall Quality ratings for the TopicalChat corpus. All values with p > 0.05 are italicized.
+
+Metric
+
+Spearman Pearson
+Word-Overlap Metrics
+F-1
+0.1422
+0.1241
+BLEU-1
+0.0434
+0.0469
+BLEU-2
+0.1122
+0.0943
+BLEU-3
+0.1202
+0.0924
+BLEU-4
+0.1353
+0.0899
+METEOR
+0.2527
+0.2713
+ROUGE-L
+0.0659
+0.0385
+Embedding Based Metrics
+Greedy Matching
+0.0916
+0.0625
+Embedding Average
+0.1182
+0.1428
+Vector Extrema
+0.1570
+0.1410
+Skip-Thought
+-0.0393
+-0.0452
+BERTScore (base)
+0.1690
+0.1526
+BERTScore (large)
+0.1518
+0.1211
+Reference Free Metrics
+USR-MLM
+0.0795
+0.0788
+USR-DR (x = f)
+-0.0495
+-0.0454
+USR-DR (x = c)
+0.4814
+0.6087
+USR
+0.4693
+0.4115
+Table 6: Turn-level correlations between all automatic
+metrics and the Overall Quality ratings for the PersonaChat corpus. All values with p > 0.05 are italicized.
+
+the automatic metrics. USR shows a strong improvement over all other methods. This strong
+performance can be attributed to two factors: (1)
+the ability of MLM and DR to accurately quantify qualities of a generated response without a
+reference response, and (2) the ability of USR to
+effectively combine MLM and DR into a better
+correlated overall metric.
+USR shows a similar improvement over all other
+metrics on PersonaChat, as shown in Table 6. However, DR (x = c) outperforms USR despite the fact
+that four out of the five sub-metrics input into the
+USR regression are DR (x = c). This result is probably due to PersonaChat’s strong dependancy on
+both dialog context and persona, both of which DR
+(x = c) explicitly leverages.
+We compute the system-level correlation between all automatic metrics and the Overall Quality
+ratings. USR significantly (p < 0.01) outperforms
+all other metrics with a Spearman correlation of 1.0
+on both datasets and Pearson correlations of 0.92
+(Topical-Chat) and 0.82 (PersonaChat). The full
+set of system-level correlations can be found in the
+appendix.
+
+These results demonstrate USR’s effectiveness.
+It strongly outperforms other metrics on both turnlevel and system-level correlations. Gopalakrishnan et al. (2019) use the F-1 score as their primary automatic evaluation metric when presenting
+Topical-Chat. The results demonstrate a significant
+difference between USR and the F-1 score, suggesting that USR is a better metric for the Topical-Chat
+corpus.
+
+6
+
+Discussion
+
+USR achieves statistically significant correlations
+with human judgement. The results hold across
+two datasets, Topical-Chat (Gopalakrishnan et al.,
+2019) and PersonaChat (Zhang et al., 2018).
+USR is configurable. Notably it is composed of
+several specific dialog quality sub-metrics. These
+sub-metrics are combined in a configurable manner,
+using a regression. For other tasks, datasets or even
+users, this regression can be adjusted, allowing
+qualities to be removed or re-weighted. Additional
+sub-metrics could be added.
+USR should be used alongside human evaluation. USR was created to facilitate development
+and tuning of dialog models. As such, USR can
+be used for model selection and hyperparameter
+tuning. USR should not be used to claim superior
+performance over another method.
+USR may not work with non-generative models, which were not addressed here. Responses
+produced by a model that is too similar to the evaluation models (e.g., to DR) are a particular concern.
+
+7
+
+Conclusions
+
+This paper presents USR, an UnSupervised and
+Reference-free evaluation metric for dialog. To address the shortcomings of standard metrics for language generation, USR (1) is reference-free, (2) is
+composed of multiple sub-metrics that evaluate specific qualities of dialog, (3) has a definition of good
+dialog that is configurable. Thus the metric may
+be adapted to different tasks and datasets. USR is
+shown to strongly correlate with human judgment
+on Topical-Chat (turn-level: 0.42, system-level:
+1.0) and PersonaChat (turn-level: 0.48, systemlevel: 1.0).
+
+8
+
+Acknowledgements
+
+We thank the following individuals for their help
+with annotation: Evgeniia Razumovskaia, Felix
+Labelle, Mckenna Brown and Yulan Feng.
+
+References
+Michael Denkowski and Alon Lavie. 2014. Meteor universal: Language specific translation evaluation for
+any target language. In Proceedings of the Ninth
+Workshop on Statistical Machine Translation, pages
+376–380.
+Jan Deriu, Alvaro Rodrigo, Arantxa Otegi, Guillermo
+Echegoyen, Sophie Rosset, Eneko Agirre, and
+Mark Cieliebak. 2019.
+Survey on evaluation
+methods for dialogue systems.
+arXiv preprint
+arXiv:1905.04071.
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and
+Kristina Toutanova. 2018. Bert: Pre-training of deep
+bidirectional transformers for language understanding. arXiv preprint arXiv:1810.04805.
+Emily Dinan, Varvara Logacheva, Valentin Malykh,
+Alexander Miller, Kurt Shuster, Jack Urbanek,
+Douwe Kiela, Arthur Szlam, Iulian Serban, Ryan
+Lowe, et al. 2019. The second conversational
+intelligence challenge (convai2). arXiv preprint
+arXiv:1902.00098.
+Gabriel Forgues,
+Joelle Pineau,
+Jean-Marie
+Larchevêque, and Réal Tremblay. 2014. Bootstrapping dialog systems with word embeddings.
+In Nips, modern machine learning and natural
+language processing workshop, volume 2.
+Michel Galley, Chris Brockett, Alessandro Sordoni,
+Yangfeng Ji, Michael Auli, Chris Quirk, Margaret Mitchell, Jianfeng Gao, and Bill Dolan. 2015.
+deltaBLEU: A discriminative metric for generation
+tasks with intrinsically diverse targets. In Proceedings of the 53rd Annual Meeting of the Association
+for Computational Linguistics and the 7th International Joint Conference on Natural Language Processing (Volume 2: Short Papers), pages 445–450,
+Beijing, China. Association for Computational Linguistics.
+Karthik Gopalakrishnan, Behnam Hedayatnia, Qinlang Chen, Anna Gottardi, Sanjeev Kwatra, Anu
+Venkatesh, Raefer Gabriel, Dilek Hakkani-Tür, and
+Amazon Alexa AI. 2019.
+Topical-chat: Towards knowledge-grounded open-domain conversations. Proc. Interspeech 2019, pages 1891–1895.
+Prakhar Gupta, Shikib Mehri, Tiancheng Zhao, Amy
+Pavel, Maxine Eskenazi, and Jeffrey P Bigham.
+2019. Investigating evaluation of open-domain dialogue systems with human generated multiple references. arXiv preprint arXiv:1907.10568.
+Ari Holtzman, Jan Buys, Maxwell Forbes, and Yejin
+Choi. 2019. The curious case of neural text degeneration. arXiv preprint arXiv:1904.09751.
+Ryan Kiros, Yukun Zhu, Ruslan R Salakhutdinov,
+Richard Zemel, Raquel Urtasun, Antonio Torralba,
+and Sanja Fidler. 2015. Skip-thought vectors. In
+Advances in neural information processing systems,
+pages 3294–3302.
+
+Jiwei Li, Will Monroe, Tianlin Shi, Sébastien Jean,
+Alan Ritter, and Dan Jurafsky. 2017. Adversarial learning for neural dialogue generation. arXiv
+preprint arXiv:1701.06547.
+Chin-Yew Lin. 2004. Rouge: A package for automatic evaluation of summaries. Text Summarization
+Branches Out.
+Chia-Wei Liu, Ryan Lowe, Iulian V Serban, Michael
+Noseworthy, Laurent Charlin, and Joelle Pineau.
+2016. How not to evaluate your dialogue system:
+An empirical study of unsupervised evaluation metrics for dialogue response generation. arXiv preprint
+arXiv:1603.08023.
+Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Mandar Joshi, Danqi Chen, Omer Levy, Mike Lewis,
+Luke Zettlemoyer, and Veselin Stoyanov. 2019.
+Roberta: A robustly optimized bert pretraining approach. arXiv preprint arXiv:1907.11692.
+Ryan Lowe, Michael Noseworthy, Iulian Vlad Serban, Nicolas Angelard-Gontier, Yoshua Bengio, and
+Joelle Pineau. 2017. Towards an automatic Turing test: Learning to evaluate dialogue responses.
+In Proceedings of the 55th Annual Meeting of the
+Association for Computational Linguistics (Volume
+1: Long Papers), pages 1116–1126, Vancouver,
+Canada. Association for Computational Linguistics.
+Ryan Lowe, Nissan Pow, Iulian Serban, and Joelle
+Pineau. 2015. The ubuntu dialogue corpus: A large
+dataset for research in unstructured multi-turn dialogue systems. arXiv preprint arXiv:1506.08909.
+Shikib Mehri, Evgeniia Razumovsakaia, Tiancheng
+Zhao, and Maxine Eskenazi. 2019. Pretraining
+methods for dialog context representation learning.
+arXiv preprint arXiv:1906.00414.
+Kishore Papineni, Salim Roukos, Todd Ward, and WeiJing Zhu. 2002. Bleu: a method for automatic evaluation of machine translation. In Proceedings of
+40th Annual Meeting of the Association for Computational Linguistics, pages 311–318. Association for
+Computational Linguistics.
+Vasile Rus and Mihai Lintean. 2012. A comparison of
+greedy and optimal assessment of natural language
+student input using word-to-word similarity metrics.
+In Proceedings of the Seventh Workshop on Building
+Educational Applications Using NLP, pages 157–
+162. Association for Computational Linguistics.
+Shikhar Sharma, Layla El Asri, Hannes Schulz, and
+Jeremie Zumer. 2017.
+Relevance of unsupervised metrics in task-oriented dialogue for evaluating natural language generation. arXiv preprint
+arXiv:1706.09799.
+Alessandro Sordoni, Michel Galley, Michael Auli,
+Chris Brockett, Yangfeng Ji, Margaret Mitchell,
+Jian-Yun Nie, Jianfeng Gao, and William B. Dolan.
+2015.
+A neural network approach to contextsensitive generation of conversational responses. In
+HLT-NAACL.
+
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob
+Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz
+Kaiser, and Illia Polosukhin. 2017. Attention is all
+you need. In Advances in Neural Information Processing Systems, pages 6000–6010.
+Anu Venkatesh, Chandra Khatri, Ashwin Ram, Fenfei
+Guo, Raefer Gabriel, Ashish Nagar, Rohit Prasad,
+Ming Cheng, Behnam Hedayatnia, Angeliki Metallinou, et al. 2018. On evaluating and comparing open domain dialog systems. arXiv preprint
+arXiv:1801.03625.
+Marilyn A Walker, Diane J Litman, Candace A Kamm,
+and Alicia Abella. 1997. Paradise: A framework for
+evaluating spoken dialogue agents. arXiv preprint
+cmp-lg/9704004.
+John Wieting, Mohit Bansal, Kevin Gimpel, and
+Karen Livescu. 2015. Towards universal paraphrastic sentence embeddings.
+arXiv preprint
+arXiv:1511.08198.
+Thomas Wolf, Lysandre Debut, Victor Sanh, Julien
+Chaumond, Clement Delangue, Anthony Moi, Pierric Cistac, Tim Rault, R’emi Louf, Morgan Funtowicz, and Jamie Brew. 2019a. Huggingface’s transformers: State-of-the-art natural language processing. ArXiv, abs/1910.03771.
+Thomas Wolf, Victor Sanh, Julien Chaumond, and
+Clement Delangue. 2019b. Transfertransfo: A
+transfer learning approach for neural network
+based conversational agents.
+arXiv preprint
+arXiv:1901.08149.
+Saizheng Zhang, Emily Dinan, Jack Urbanek, Arthur
+Szlam, Douwe Kiela, and Jason Weston. 2018. Personalizing dialogue agents: I have a dog, do you
+have pets too? arXiv preprint arXiv:1801.07243.
+Tianyi Zhang, Varsha Kishore, Felix Wu, Kilian Q
+Weinberger, and Yoav Artzi. 2019. Bertscore: Evaluating text generation with bert. arXiv preprint
+arXiv:1904.09675.
+Tiancheng Zhao, Ran Zhao, and Maxine Eskenazi.
+2017. Learning discourse-level diversity for neural
+dialog models using conditional variational autoencoders. arXiv preprint arXiv:1703.10960.
+
+A
+
+Annotation Instructions
+
+Tables 6, 7 and 8 show the annotation instructions
+used for human quality annotation. These instructions and examples are verbatim what was shown
+to the annotators.
+
+B
+
+Metric Evaluation
+
+Table 3 in the main paper showed turn-level correlations for each specific quality. Due to space
+limitations, the table only included results for only
+the best correlated metrics. The full results are
+shown in Tables 9 - 21.
+
+C
+
+Code and Data Release
+
+The code for the metrics can be found at https://
+github.com/shikib/usr and the human quality
+annotations can be found at http://shikib.com/
+usr. The human quality annotations will allow
+benchmarking of additional metrics.
+
+Annotation Instructions
+You will be given a conversation between two individuals. You will then be given several potential
+responses for the next turn in the conversation. These responses all concern an interesting fact, which will
+be provided as well.
+Your task is to rate each of the responses on several metrics. The response for one metric should not
+influence the other metrics. For example, if a response is not understandable or has grammatical errors –
+you should try to ignore this when considering whether it maintains context or if it is interesting.
+Please make sure you read and understand these instructions carefully. Feel free to ask if you require
+clarification. Please keep this document open while reviewing, and refer to it as needed.
+Understandable (0-1) Is the response understandable in the context of the history? (Not if its on
+topic, but for example if it uses pronouns they should make sense)
+• A score of 0 (no) means that the response is difficult to understand.
+You do not know what the person is trying to say.
+– i did n’t know that . i love to watch the movie inception , it ’s
+also the first racing movie to be a woman haha . i guess the
+movie was originally titled ” inception ” awesome movie !
+– Context: in my religion , there is no star . how about you
+Response: yeah it was back in 1975 .
+• A score of 1 (yes) means that the response is understandable. You
+know what the person is trying to say.
+– my favorite role would have to be quarterback . it is such an
+interesting role .
+– that is true . i think lebron is the highest paid celebrity , i wonder
+if he will be in the space jam sequel .
+Natural (1-3)
+
+Is the response naturally written?
+• A score of 1 (bad) means that the response is unnatural.
+– Context: A: wow . do you believe in stars of the zodiac ? what
+is your star ? B: in my religion , there is no star . how about you
+Response: yeah , it was back in 1975 .
+– i think he is , he is a great teacher and he also taught ellie
+kemper , she is a great teacher
+• A score of 2 (ok) means the response is strange, but not entirely
+unnatural.
+– Context: A: wow . do you believe in stars of the zodiac ? what
+is your star ? B: in my religion , there is no star . how about you
+Response: i read it sometimes for the fun of it .
+• A score of 3 (good) means that the response is natural.
+– i think it ’s funny that the soviet union sent a spacecraft to venus
+.
+
+Table 7: Annotation instructions (part 1 of 3).
+
+Maintains
+Context
+(1-3)
+
+Annotation Instructions (ctd.)
+Does the response serve as a valid continuation of the conversation history?
+• A score of 1 (no) means that the response drastically changes topic or ignores the conversation history.
+– Context: A: wow . do you believe in stars of the zodiac ? what is your star ? B: in
+my religion , there is no star . how about you Response: i think it ’s funny that the
+soviet union sent a spacecraft to venus .
+• A score of 2 (somewhat) means the response refers to the conversation history in a limited
+capacity (e.g., in a generic way) and shifts the conversation topic.
+– Context: i do like some drama stuff , yeah he was awesome in that . Response: yeah
+. do you like jon hamm ?
+– Context: i believe that ! he would have played longer i ’m sure if he did the granny
+style approach to shooting freethrows ! Response: i agree . did you know that space
+jam is the highest grossing basketball movie of all time ?
+• A score of 3 (yes) means the response is on topic and strongly acknowledges the conversation history.
+– Context: B: wow , that ’s great . especially because more than of nba players go
+broke 5 years after retirement . A: i believe that ! he would have played longer i ’m
+sure if he did the granny style approach to shooting freethrows ! Response: a lot
+of players can make money by starring in movies . did you know space jam is the
+highest grossing movie of all time ? maybe one of the broke retired players can be in
+the sequel !
+– Context: B: you like drama ? patrick stewart teaches classes now . i loved him in
+star trek A: i do like some drama stuff , yeah he was awesome in that . Response:
+jonn hamm was also a drama teacher . he taught erin from the office
+
+Interesting
+(1-3)
+
+Is the response dull/interesting?
+• A score of 1 (dull) means that the response is generic and dull.
+– thats true . i agree .
+• A score of 2 (somewhat interesting) means the response is somewhat interesting and could
+engage you in the conversation (e.g., an opinion, thought)
+– my favorite role would have to be quarterback . it is such an interesting role .
+– i love tom brady . i love tom brady .
+• A score of 3 (interesting) means the response is very interesting or presents an interesting
+fact
+– i agree . did you know that space jam is the highest grossing basketball movie of all
+time ?
+– a lot of players can make money by starring in movies . did you know space jam is
+the highest grossing movie of all time ? maybe one of the broke retired players can
+be in the sequel !
+
+Table 8: Annotation instructions (part 2 of 3)
+
+Uses Knowledge
+(0-1)
+
+Annotation Instructions (ctd.)
+Given the interesting fact that the response is conditioned on, how well does the
+response use the fact?
+• A score of 0 (no) means the response does not mention or refer to the fact at all
+• A score of 1 (yes) means the response uses the fact well
+
+Overall Quality (1- Given your answers above, what is your overall impression of this utterance?
+3)
+• A score of 1 (very bad). A completely invalid response. It would be difficult to
+recover the conversation after this.
+• A score of 2 (bad). Valid response, but otherwise poor in quality.
+• A score of 3 (neutral) means this response is neither good nor bad. This response
+has no negative qualities, but no positive ones either.
+• A score of 4 (good) means this is a good response, but falls short of being
+perfect because of a key flaw.
+• A score of 5 (very good) means this response is good and does not have any
+strong flaws.
+Table 9: Annotation instructions (part 3 of 3)
+
+Metric Name
+
+Turn-Level Correlation
+
+System-Level Correlation
+
+Pearson
+
+Spearman
+
+Pearson
+
+0.6000
+0.7000
+0.9000
+0.9000
+0.9000
+0.9000
+0.9000
+
+0.6120
+0.8334
+0.8201
+0.9033
+0.8740
+0.9435
+0.8143
+
+Spearman
+
+Word-Overlap Metrics
+F-1
+BLEU-1
+BLEU-2
+BLEU-3
+BLEU-4
+METEOR
+ROUGE-L
+
+0.1645
+0.2728
+0.2862
+0.2569
+0.2160
+0.3365
+0.2745
+
+0.1690
+0.2876
+0.3012
+0.3007
+0.2956
+0.3908
+0.2870
+
+Embedding-Based Metrics
+Greedy Matching
+Embedding Average
+Vector Extrema
+Skip-Thought
+BERTScore (base)
+BERTScore (large)
+
+0.1712
+0.1803
+0.2032
+0.1040
+0.3229
+0.2982
+
+0.1943
+0.2038
+0.2091
+0.1181
+0.3540
+0.3252
+
+0.8000
+0.7000
+0.8000
+0.5000
+0.9000
+0.9000
+
+0.5610
+0.9166
+0.5838
+0.5142
+0.9100
+0.8536
+
+0.9000
+0.7000
+0.9000
+1.0000
+
+0.4732
+0.9182
+0.8519
+0.9276
+
+Reference Free Metrics
+USR-MLM
+USR-DR (x = c)
+USR-DR (x = f)
+USR
+
+0.3086
+0.3245
+0.1419
+0.4192
+
+0.3345
+0.4068
+0.3221
+0.4220
+
+Table 10: Correlations of all the metrics with Overall Quality ratings on Topical-Chat. All values with p ≥ 0.05
+are italicized.
+
+Metric Name
+
+Turn-Level Correlation
+
+System-Level Correlation
+
+Pearson
+
+Spearman
+
+Pearson
+
+1.0000
+0.6000
+0.4000
+0.4000
+0.8000
+0.8000
+0.0000
+
+0.9956
+0.2599
+0.6816
+0.6668
+0.8413
+0.9065
+0.1710
+
+Spearman
+
+Word-Overlap Metrics
+F-1
+BLEU-1
+BLEU-2
+BLEU-3
+BLEU-4
+METEOR
+ROUGE-L
+
+0.1422
+0.0434
+0.1122
+0.1202
+0.1353
+0.2527
+0.0659
+
+0.1241
+0.0469
+0.0943
+0.0924
+0.0899
+0.2713
+0.0385
+
+Embedding-Based Metrics
+Greedy Matching
+Embedding Average
+Vector Extrema
+Skip-Thought
+BERTScore (base)
+BERTScore (large)
+
+0.0916
+0.1182
+0.1570
+-0.0393
+0.1690
+0.1518
+
+0.0625
+0.1428
+0.1410
+-0.0452
+0.1526
+0.1211
+
+0.8000
+0.8000
+0.6000
+-0.2000
+0.8000
+0.0000
+
+0.3808
+0.8628
+0.4349
+0.2599
+0.5173
+0.2410
+
+-0.4000
+1.0000
+-0.2108
+1.0000
+
+-0.2842
+0.8202
+-0.0178
+0.8084
+
+Reference Free Metrics
+USR-MLM
+USR-DR (x = c)
+USR-DR (x = f)
+USR
+
+0.0795
+0.4814
+-0.0495
+0.4693
+
+0.0788
+0.6087
+-0.0454
+0.4115
+
+Table 11: Correlations of all the metrics with Overall Quality ratings on PersonaChat. All values with p ≥ 0.05
+are italicized.
+
+Metric Name
+
+Turn-Level Correlation
+
+System-Level Correlation
+
+Pearson
+
+Spearman
+
+Pearson
+
+0.8000
+0.6000
+0.7000
+0.7000
+0.7000
+0.7000
+0.7000
+
+0.6481
+0.8360
+0.8262
+0.9018
+0.8663
+0.9424
+0.8208
+
+Spearman
+
+Word-Overlap Metrics
+F-1
+BLEU-1
+BLEU-2
+BLEU-3
+BLEU-4
+METEOR
+ROUGE-L
+
+0.0425
+0.1794
+0.2360
+0.2099
+0.2010
+0.2452
+0.2069
+
+0.0620
+0.1522
+0.2081
+0.2137
+0.2175
+0.2246
+0.1632
+
+Embedding-Based Metrics
+Greedy Matching
+Embedding Average
+Vector Extrema
+Skip-Thought
+BERTScore (base)
+BERTScore (large)
+
+0.0839
+0.0509
+0.1561
+0.0810
+0.2611
+0.2556
+
+0.0868
+0.0961
+0.1321
+0.0706
+0.2502
+0.2263
+
+0.6000
+0.6000
+0.6000
+0.2000
+0.7000
+0.7000
+
+0.5664
+0.9204
+0.6113
+0.4725
+0.9118
+0.8577
+
+0.7000
+0.9000
+0.7000
+0.9000
+
+0.4666
+0.9337
+0.8420
+0.9329
+
+Reference Free Metrics
+USR-MLM
+USR-DR (x = c)
+USR-DR (x = f)
+USR
+
+0.3264
+0.1500
+0.0881
+0.2932
+
+0.3268
+0.2213
+0.1967
+0.3152
+
+Table 12: Correlations of all the metrics with the Understandable ratings on Topical-Chat. All values with p ≥
+0.05 are italicized. The USR-MLM metric has poor system-level correlations, however the USR metric leverages
+predictions from the other sub-metrics to improve this.
+
+Metric Name
+
+Turn-Level Correlation
+
+System-Level Correlation
+
+Pearson
+
+Spearman
+
+Pearson
+
+1.0000
+0.6000
+0.4000
+0.4000
+0.8000
+0.8000
+0.0000
+
+0.9956
+0.2599
+0.6816
+0.6668
+0.8413
+0.9065
+0.1710
+
+Spearman
+
+Word-Overlap Metrics
+F-1
+BLEU-1
+BLEU-2
+BLEU-3
+BLEU-4
+METEOR
+ROUGE-L
+
+-0.0340
+0.0123
+0.0854
+0.0412
+0.0537
+0.0820
+0.0346
+
+-0.0550
+-0.0196
+0.0221
+0.0249
+0.0279
+0.0431
+0.0076
+
+Embedding-Based Metrics
+Greedy Matching
+Embedding Average
+Vector Extrema
+Skip-Thought
+BERTScore (base)
+BERTScore (large)
+
+0.0594
+0.0573
+0.1097
+-0.0338
+0.0676
+0.0380
+
+0.0710
+0.0835
+0.1113
+-0.0297
+0.0685
+0.0086
+
+0.8000
+0.8000
+0.6000
+-0.2000
+0.8000
+0.0000
+
+0.3808
+0.8628
+0.4349
+0.2599
+0.5173
+0.2410
+
+-0.4000
+1.0000
+-0.2108
+1.0000
+
+-0.2842
+0.8202
+-0.0178
+0.8084
+
+Reference Free Metrics
+USR-MLM
+USR-DR (x = c)
+USR-DR (x = f)
+USR
+
+0.1313
+0.0728
+-0.0390
+0.0997
+
+0.1186
+0.1446
+-0.0433
+0.1337
+
+Table 13: Correlations of all the metrics with Understandable ratings on PersonaChat. All values with p ≥ 0.05
+are italicized.
+
+Metric Name
+
+Turn-Level Correlation
+
+System-Level Correlation
+
+Pearson
+
+Spearman
+
+Pearson
+
+0.6000
+0.7000
+0.9000
+0.9000
+0.9000
+0.9000
+0.9000
+
+0.5605
+0.7976
+0.7888
+0.8979
+0.8973
+0.9297
+0.7902
+
+Spearman
+
+Word-Overlap Metrics
+F-1
+BLEU-1
+BLEU-2
+BLEU-3
+BLEU-4
+METEOR
+ROUGE-L
+
+0.0301
+0.1606
+0.1959
+0.1896
+0.1799
+0.2121
+0.1760
+
+0.0398
+0.1334
+0.1648
+0.1745
+0.1748
+0.1906
+0.1457
+
+Embedding-Based Metrics
+Greedy Matching
+Embedding Average
+Vector Extrema
+Skip-Thought
+BERTScore (base)
+BERTScore (large)
+
+0.0534
+0.0477
+0.1009
+0.0959
+0.2164
+0.2260
+
+0.0483
+0.0970
+0.0761
+0.0858
+0.2088
+0.2094
+
+0.8000
+0.7000
+0.8000
+0.5000
+0.9000
+0.9000
+
+0.5271
+0.8875
+0.5363
+0.5313
+0.9024
+0.8319
+
+0.9000
+0.7000
+0.9000
+1.0000
+
+0.4485
+0.9222
+0.8808
+0.9220
+
+Reference Free Metrics
+USR-MLM
+USR-DR (x = c)
+USR-DR (x = f)
+USR
+
+0.3370
+0.1325
+0.0313
+0.2763
+
+0.3254
+0.2148
+0.1611
+0.3037
+
+Table 14: Correlations of all the metrics with the Natural ratings on Topical-Chat. All values with p ≥ 0.05 are italicized. The USR-MLM metric has poor system-level correlations, however the USR metric leverages predictions
+from the other sub-metrics to improve this.
+
+Metric Name
+
+Turn-Level Correlation
+
+System-Level Correlation
+
+Pearson
+
+Spearman
+
+Pearson
+
+1.0000
+0.6000
+0.4000
+0.4000
+0.8000
+0.8000
+0.0000
+
+0.9956
+0.2599
+0.6816
+0.6668
+0.8413
+0.9065
+0.1710
+
+Spearman
+
+Word-Overlap Metrics
+F-1
+BLEU-1
+BLEU-2
+BLEU-3
+BLEU-4
+METEOR
+ROUGE-L
+
+0.0815
+-0.0072
+0.0838
+0.0823
+0.1081
+0.0989
+0.0096
+
+0.0717
+-0.0216
+0.0344
+0.0457
+0.0499
+0.0950
+-0.0087
+
+Embedding-Based Metrics
+Greedy Matching
+Embedding Average
+Vector Extrema
+Skip-Thought
+BERTScore (base)
+BERTScore (large)
+
+0.1029
+0.1413
+0.1458
+-0.0355
+0.0606
+0.0494
+
+0.0665
+0.1152
+0.1375
+-0.0365
+0.0585
+0.0477
+
+0.8000
+0.8000
+0.6000
+-0.2000
+0.8000
+0.0000
+
+0.3808
+0.8628
+0.4349
+0.2599
+0.5173
+0.2410
+
+-0.4000
+1.0000
+-0.2108
+1.0000
+
+-0.2842
+0.8202
+-0.0178
+0.8084
+
+Reference Free Metrics
+USR-MLM
+USR-DR (x = c)
+USR-DR (x = f)
+USR
+
+0.0999
+0.1733
+-0.0033
+0.1862
+
+0.1119
+0.2291
+0.0642
+0.2430
+
+Table 15: Correlations of all the metrics with the Natural ratings on PersonaChat. All values with p ≥ 0.05 are
+italicized.
+
+Metric Name
+
+Turn-Level Correlation
+
+System-Level Correlation
+
+Pearson
+
+Spearman
+
+Pearson
+
+0.6000
+1.0000
+0.9000
+0.9000
+0.5000
+0.9000
+0.9000
+
+0.6483
+0.8754
+0.8555
+0.9090
+0.8464
+0.9573
+0.8410
+
+Spearman
+
+Word-Overlap Metrics
+F-1
+BLEU-1
+BLEU-2
+BLEU-3
+BLEU-4
+METEOR
+ROUGE-L
+
+0.1290
+0.2097
+0.2087
+0.1736
+0.1307
+0.2495
+0.1928
+
+0.1199
+0.2228
+0.2353
+0.2377
+0.2345
+0.3018
+0.2031
+
+Embedding-Based Metrics
+Greedy Matching
+Embedding Average
+Vector Extrema
+Skip-Thought
+BERTScore (base)
+BERTScore (large)
+
+0.1036
+0.1197
+0.1839
+0.0326
+0.2432
+0.2140
+
+0.1249
+0.1511
+0.1840
+0.0568
+0.2642
+0.2328
+
+0.8000
+1.0000
+0.8000
+0.6000
+0.9000
+0.9000
+
+0.6078
+0.9460
+0.6275
+0.5237
+0.9160
+0.8779
+
+0.9000
+0.3000
+0.5000
+0.7000
+
+0.5190
+0.8899
+0.8188
+0.9270
+
+Reference Free Metrics
+USR-MLM
+USR-DR (x = c)
+USR-DR (x = f)
+USR
+
+0.3099
+0.3391
+0.0594
+0.4160
+
+0.3243
+0.3650
+0.1836
+0.3769
+
+Table 16: Correlations of all the metrics with the Maintains Context ratings on Topical-Chat. All values with
+p ≥ 0.05 are italicized. Several referenced metrics perform strongly on the system-level correlations, however
+USR strongly outperforms all other metrics on the turn-level correlations.
+
+Metric Name
+
+Turn-Level Correlation
+
+System-Level Correlation
+
+Pearson
+
+Spearman
+
+Pearson
+
+1.0000
+0.6000
+0.4000
+0.4000
+0.8000
+0.8000
+0.0000
+
+0.9956
+0.2599
+0.6816
+0.6668
+0.8413
+0.9065
+0.1710
+
+Spearman
+
+Word-Overlap Metrics
+F-1
+BLEU-1
+BLEU-2
+BLEU-3
+BLEU-4
+METEOR
+ROUGE-L
+
+0.1073
+0.0713
+0.0949
+0.1270
+0.1467
+0.2500
+0.1135
+
+0.0747
+0.0799
+0.1372
+0.1461
+0.1508
+0.2564
+0.0910
+
+Embedding-Based Metrics
+Greedy Matching
+Embedding Average
+Vector Extrema
+Skip-Thought
+BERTScore (base)
+BERTScore (large)
+
+0.1503
+0.1010
+0.2288
+0.0243
+0.1770
+0.1877
+
+0.1631
+0.1660
+0.2631
+0.0139
+0.1686
+0.1569
+
+0.8000
+0.8000
+0.6000
+-0.2000
+0.8000
+0.0000
+
+0.3808
+0.8628
+0.4349
+0.2599
+0.5173
+0.2410
+
+-0.4000
+1.0000
+-0.2108
+1.0000
+
+-0.2842
+0.8202
+-0.0178
+0.8084
+
+Reference Free Metrics
+USR-MLM
+USR-DR (x = c)
+USR-DR (x = f)
+USR
+
+0.1805
+0.6021
+-0.0198
+0.6065
+
+0.2067
+0.5625
+-0.0164
+0.5280
+
+Table 17: Correlations of all the metrics with the Maintains Context ratings on PersonaChat. All values with
+p ≥ 0.05 are italicized. Several referenced metrics perform strongly on the system-level correlations, however
+USR strongly outperforms all other metrics on the turn-level correlations.
+
+Metric Name
+
+Turn-Level Correlation
+
+System-Level Correlation
+
+Pearson
+
+Spearman
+
+Pearson
+
+0.6000
+0.7000
+0.9000
+0.9000
+0.9000
+0.9000
+0.9000
+
+0.5944
+0.8197
+0.8099
+0.9047
+0.8883
+0.9398
+0.8084
+
+Spearman
+
+Word-Overlap Metrics
+F-1
+BLEU-1
+BLEU-2
+BLEU-3
+BLEU-4
+METEOR
+ROUGE-L
+
+0.2523
+0.3144
+0.3184
+0.2782
+0.2322
+0.3668
+0.2946
+
+0.2565
+0.3343
+0.3323
+0.3247
+0.3156
+0.4391
+0.2995
+
+Embedding-Based Metrics
+Greedy Matching
+Embedding Average
+Vector Extrema
+Skip-Thought
+BERTScore (base)
+BERTScore (large)
+
+0.1989
+0.1940
+0.2101
+0.1139
+0.3512
+0.3167
+
+0.2111
+0.2161
+0.2050
+0.1356
+0.3725
+0.3349
+
+0.8000
+0.7000
+0.8000
+0.5000
+0.9000
+0.9000
+
+0.5512
+0.9056
+0.5694
+0.5187
+0.9108
+0.8480
+
+0.9000
+0.7000
+0.9000
+1.0000
+
+0.4663
+0.9233
+0.8685
+0.9297
+
+Reference Free Metrics
+USR-MLM
+USR-DR (x = c)
+USR-DR (x = f)
+USR
+
+0.3189
+0.3533
+0.2006
+0.4555
+
+0.3337
+0.4877
+0.4110
+0.4645
+
+Table 18: Correlations of all the metrics with the Interesting ratings on Topical-Chat. All values with p ≥ 0.05 are
+italicized.
+
+Metric Name
+
+Turn-Level Correlation
+
+System-Level Correlation
+
+Pearson
+
+Spearman
+
+Pearson
+
+1.0000
+0.6000
+0.4000
+0.4000
+0.8000
+0.8000
+0.0000
+
+0.9956
+0.2599
+0.6816
+0.6668
+0.8413
+0.9065
+0.1710
+
+Spearman
+
+Word-Overlap Metrics
+F-1
+BLEU-1
+BLEU-2
+BLEU-3
+BLEU-4
+METEOR
+ROUGE-L
+
+0.0473
+-0.1081
+-0.1048
+-0.1247
+-0.1359
+-0.0458
+-0.1456
+
+0.0132
+-0.0922
+-0.1010
+-0.1151
+-0.1242
+0.0116
+-0.1354
+
+Embedding-Based Metrics
+Greedy Matching
+Embedding Average
+Vector Extrema
+Skip-Thought
+BERTScore (base)
+BERTScore (large)
+
+-0.1778
+-0.0141
+-0.1883
+-0.0882
+0.0325
+-0.0418
+
+-0.2080
+-0.0177
+-0.1746
+-0.0916
+0.0491
+-0.0245
+
+0.8000
+0.8000
+0.6000
+-0.2000
+0.8000
+0.0000
+
+0.3808
+0.8628
+0.4349
+0.2599
+0.5173
+0.2410
+
+-0.4000
+1.0000
+-0.2108
+1.0000
+
+-0.2842
+0.8202
+-0.0178
+0.8084
+
+Reference Free Metrics
+USR-MLM
+USR-DR (x = c)
+USR-DR (x = f)
+USR
+
+-0.1045
+0.0606
+-0.0022
+0.0315
+
+-0.1007
+0.2634
+-0.0039
+0.0171
+
+Table 19: Correlations of all the metrics with the Interesting ratings on PersonaChat. All values with p ≥ 0.05 are
+italicized.
+
+Metric Name
+
+Turn-Level Correlation
+
+System-Level Correlation
+
+Pearson
+
+Spearman
+
+Pearson
+
+0.6000
+0.7000
+0.9000
+0.9000
+0.9000
+0.9000
+0.9000
+
+0.5970
+0.8357
+0.8309
+0.9259
+0.9084
+0.9534
+0.8333
+
+Spearman
+
+Word-Overlap Metrics
+F-1
+BLEU-1
+BLEU-2
+BLEU-3
+BLEU-4
+METEOR
+ROUGE-L
+
+0.1495
+0.2888
+0.2819
+0.2442
+0.2126
+0.3328
+0.3099
+
+0.1485
+0.3033
+0.3066
+0.3106
+0.3096
+0.3909
+0.3273
+
+Embedding-Based Metrics
+Greedy Matching
+Embedding Average
+Vector Extrema
+Skip-Thought
+BERTScore (base)
+BERTScore (large)
+
+0.2327
+0.1812
+0.2294
+0.0986
+0.2847
+0.2909
+
+0.2306
+0.1827
+0.2111
+0.1145
+0.2947
+0.3167
+
+0.8000
+0.7000
+0.8000
+0.5000
+0.9000
+0.9000
+
+0.5874
+0.9151
+0.5917
+0.5397
+0.9308
+0.8703
+
+0.9000
+0.7000
+0.9000
+1.0000
+
+0.5070
+0.9155
+0.8884
+0.9469
+
+Reference Free Metrics
+USR-MLM
+USR-DR (x = c)
+USR-DR (x = f)
+USR
+
+0.2195
+0.2285
+0.2220
+0.3175
+
+0.2261
+0.4179
+0.4468
+0.3353
+
+Table 20: Correlations of all the metrics with the Uses Knowledge ratings on Topical-Chat. All values with
+p ≥ 0.05 are italicized.
+
+Metric Name
+
+Turn-Level Correlation
+
+System-Level Correlation
+
+Pearson
+
+Spearman
+
+Pearson
+
+1.0000
+0.6000
+0.4000
+0.4000
+0.8000
+0.8000
+0.0000
+
+0.9956
+0.2599
+0.6816
+0.6668
+0.8413
+0.9065
+0.1710
+
+Spearman
+
+Word-Overlap Metrics
+F-1
+BLEU-1
+BLEU-2
+BLEU-3
+BLEU-4
+METEOR
+ROUGE-L
+
+0.0869
+0.0737
+0.1083
+0.0999
+0.0698
+0.1678
+0.0710
+
+0.1056
+0.0729
+0.0722
+0.0594
+0.0528
+0.1719
+0.0632
+
+Embedding-Based Metrics
+Greedy Matching
+Embedding Average
+Vector Extrema
+Skip-Thought
+BERTScore (base)
+BERTScore (large)
+
+0.0382
+0.0402
+0.0564
+-0.0686
+0.0719
+0.0271
+
+0.0057
+0.0618
+-0.0008
+-0.0609
+0.0465
+0.0094
+
+0.8000
+0.8000
+0.6000
+-0.2000
+0.8000
+0.0000
+
+0.3808
+0.8628
+0.4349
+0.2599
+0.5173
+0.2410
+
+-0.4000
+1.0000
+-0.2108
+1.0000
+
+-0.2842
+0.8202
+-0.0178
+0.8084
+
+Reference Free Metrics
+USR-MLM
+USR-DR (x = c)
+USR-DR (x = f)
+USR
+
+-0.0782
+0.4508
+-0.0927
+0.4027
+
+-0.0756
+0.6309
+-0.0903
+0.3177
+
+Table 21: Correlations of all the metrics with the Uses Knowledge ratings on PersonaChat. All values with p ≥ 0.05
+are italicized.

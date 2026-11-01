@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+memory_store.json
+ablation/
+.cache/
+corpus/pdfs/
+.DS_Store

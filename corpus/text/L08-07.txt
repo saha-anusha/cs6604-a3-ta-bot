@@ -1,0 +1,1585 @@
+Fast Inference from Transformers via Speculative Decoding
+
+Yaniv Leviathan * 1 Matan Kalman * 1 Yossi Matias 1
+
+arXiv:2211.17192v2 [cs.LG] 18 May 2023
+
+Abstract
+
+developed to make inference from them faster. Some approaches aim to reduce the inference cost for all inputs
+equally (e.g. Hinton et al., 2015; Jaszczur et al., 2021;
+Hubara et al., 2016; So et al., 2021; Shazeer, 2019). Other
+approaches stem from the observation that not all inference steps are born alike - some require a very large model,
+while others can be approximated well by more efficient
+models. These adaptive computation methods (e.g. Han
+et al., 2021; Sukhbaatar et al., 2019; Schuster et al., 2021;
+Scardapane et al., 2020; Bapna et al., 2020; Elbayad et al.,
+2019; Schwartz et al., 2020) aim to use less compute resources for easier inference steps. While many of these
+solutions have proven extremely effective in practice, they
+usually require changing the model architecture, changing
+the training-procedure and re-training the models, and don’t
+maintain identical outputs.
+
+Inference from large autoregressive models like
+Transformers is slow - decoding K tokens takes
+K serial runs of the model. In this work we introduce speculative decoding - an algorithm to
+sample from autoregressive models faster without
+any changes to the outputs, by computing several
+tokens in parallel. At the heart of our approach lie
+the observations that (1) hard language-modeling
+tasks often include easier subtasks that can be approximated well by more efficient models, and
+(2) using speculative execution and a novel sampling method, we can make exact decoding from
+the large models faster, by running them in parallel on the outputs of the approximation models, potentially generating several tokens concurrently, and without changing the distribution. Our
+method can accelerate existing off-the-shelf models without retraining or architecture changes. We
+demonstrate it on T5-XXL and show a 2X-3X
+acceleration compared to the standard T5X implementation, with identical outputs.
+
+The key observation above, that some inference steps are
+“harder” and some are “easier”, is also a key motivator for
+our work. We additionally observe that inference from large
+models is often not bottlenecked on arithmetic operations,
+but rather on memory bandwidth and communication, so
+additional computation resources might be available. Therefore we suggest increasing concurrency as a complementary approach to using an adaptive amount of computation.
+Specifically, we are able to accelerate inference without
+changing the model architectures, without changing the
+training-procedures or needing to re-train the models, and
+without changing the model output distribution. This is
+accomplished via speculative execution.
+
+1. Introduction
+Large autoregressive models, notably large Transformers
+(Vaswani et al., 2017), are much more capable than smaller
+models, as is evidenced countless times in recent years e.g.,
+in the text or image domains, like GPT-3 (Brown et al.,
+2020), LaMDA (Thoppilan et al., 2022), Parti (Yu et al.,
+2022), and PaLM (Chowdhery et al., 2022). Unfortunately,
+a single decode step from these larger models is significantly
+slower than a step from their smaller counterparts, and making things worse, these steps are done serially - decoding K
+tokens takes K serial runs of the model.
+
+Speculative execution (Burton, 1985; Hennessy & Patterson,
+2012) is an optimization technique, common in processors,
+where a task is performed in parallel to verifying if it’s
+actually needed - the payoff being increased concurrency.
+A well-known example of speculative execution is branch
+prediction. For speculative execution to be effective, we
+need an efficient mechanism to suggest tasks to execute
+that are likely to be needed. In this work, we generalize
+speculative execution to the stochastic setting - where a
+task might be needed with some probability. Applying this
+to decoding from autoregressive models like Transformers,
+we sample generations from more efficient approximation
+models as speculative prefixes for the slower target models. With a novel sampling method, speculative sampling,
+we maximize the probability of these speculative tasks to
+
+Given the importance of large autoregressive models and
+specifically large Transformers, several approaches were
+*
+
+1
+Equal contribution
+Google Research, Mountain
+View, CA, USA. Correspondence to: Yaniv Leviathan
+<leviathan@google.com>.
+
+Proceedings of the 40 th International Conference on Machine
+Learning, Honolulu, Hawaii, USA. PMLR 202, 2023. Copyright
+2023 by the author(s).
+
+1
+
+Fast Inference from Transformers via Speculative Decoding
+
+Figure 1. Our technique illustrated in the case of unconditional language modeling. Each line represents one iteration of the algorithm.
+The green tokens are the suggestions made by the approximation model (here, a GPT-like Transformer decoder with 6M parameters
+trained on lm1b with 8k tokens) that the target model (here, a GPT-like Transformer decoder with 97M parameters in the same setting)
+accepted, while the red and blue tokens are the rejected suggestions and their corrections, respectively. For example, in the first line the
+target model was run only once, and 5 tokens were generated.
+
+2. Speculative Decoding
+
+be accepted, while guaranteeing that the outputs from our
+system have the same distribution as those from the target
+model alone. For example, the sentence in Figure 1, consisting of 38 tokens, was generated by our method with
+only 9 serial runs of a larger target model (97M parameters)
+thanks to a smaller and more efficient approximation model
+(6M parameters), while the probability of generating it is
+unchanged.
+
+2.1. Overview
+Let Mp be the target model, inference from which we’re
+trying to accelerate, and p(xt |x<t ) the distribution we get
+from the model for a prefix x<t . Let Mq be a more efficient approximation model for the same task, and denote
+by q(xt |x<t ) the distribution we get from the model for a
+prefix x<t 1 . The core idea is to (1) use the more efficient
+model Mq to generate γ ∈ Z+ completions (see Section 3.5
+for how to optimally choose this parameter), then (2) use
+the target model Mp to evaluate all of the guesses and their
+respective probabilities from Mq in parallel, accepting all
+those that can lead to an identical distribution, and (3) sampling an additional token from an adjusted distribution to fix
+the first one that was rejected, or to add an additional one
+if they are all accepted. That way, each parallel run of the
+target model Mp will produce at least one new token (so the
+number of serial runs of the target model can never, even
+in the worst case, be larger than the simple autoregressive
+method), but it can potentially generate many new tokens,
+up to γ + 1, depending on how well Mq approximates Mp .
+
+We analyze our method in a variety of tasks and model
+sizes: unconditional generation from a 97M parameter GPTlike model trained on lm1b, English to German translation
+and news article summarization with an 11B parameters
+T5-XXL model, and a dialog task with a 137B parameter
+LaMDA model. We implement our method and compare
+actual walltimes for T5-XXL to those of the robust T5X
+implementation (Roberts et al., 2022), showing an out-ofthe-box latency improvement of 2X-3X, without any change
+to the outputs (Section 4).
+Our method is easy to employ in actual production settings,
+doesn’t require training new models, and doesn’t change the
+outputs. Therefore, in common situations where memory
+bandwidth is the bottleneck, and compute resources are
+available, it may be a good default to accelerate sampling
+from autoregressive models like Transformers.
+
+2.2. Standardized Sampling
+First, note that while there are many methods and parameters of sampling, like argmax, top-k, nucleus, and setting
+a temperature, and popular implementations usually treat
+them differently at the logits level, they can all easily be cast
+into standard sampling from an adjusted probability distribution. For example, argmax sampling is equivalent to zeroing
+out non-max elements of the distribution and normalizing.
+We can therefore only deal with standard sampling from a
+
+To summarize, our main contributions are: (1) A generalization of speculative execution to the stochastic setting, with
+a novel sampling method we call speculative sampling, and
+(2) A decoding mechanism we call speculative decoding that
+can accelerate decoding from autoregressive models, without any change to the model architectures, training regimes
+and output distributions.
+
+1
+We’ll use p(x) to denote p(xt |x<t ) whenever the prefix x<t
+is clear from the context, and similarly for q(x).
+
+2
+
+Fast Inference from Transformers via Speculative Decoding
+
+probability distribution, and cast all of the other types of
+sampling into that framework. Going forward we’ll assume
+that p(x) and q(x) are the distributions from Mp and Mq
+respectively, adjusted for the sampling method.
+
+ber of tokens produced by a single run of Algorithm 1.
+
+2.3. Speculative Sampling
+
+E(β) is then a natural measure of how well Mq approximates Mp . If we make the simplifying assumption that the
+βs are i.i.d., and denote α = E(β), then the number of
+tokens produced by a single run of Algorithm 1 is a capped
+geometric variable, with success probability 1 − α and cap
+γ + 1, and the expected number of tokens generated by
+Algorithm 1 satisfies Equation (1). See Figure 2.
+
+Definition 3.1. The acceptance rate βx<t , given a prefix
+x<t , is the probability of accepting xt ∼ q(xt |x<t ) by
+speculative sampling, as per Section 2.32 .
+
+To sample x ∼ p(x), we instead sample x ∼ q(x), keeping
+it if q(x) ≤ p(x), and in case q(x) > p(x) we reject the
+sample with probability 1− p(x)
+q(x) and sample x again from an
+adjusted distribution p0 (x) = norm(max(0, p(x) − q(x)))
+instead. It’s easy to show (see Appendix A.1) that for any
+distributions p(x) and q(x), and x sampled in this way,
+indeed x ∼ p(x).
+
+E(# generated tokens) =
+
+Given the distribution q(x) obtained from running Mq on
+a conditioning pref ix, we can sample a token x1 ∼ q(x).
+We then calculate the distribution p(x) by running Mp on
+pref ix while in parallel speculatively calculating the distribution of the next token x2 by running Mp on pref ix+[x1 ].
+Once both computations complete, we proceed as per above:
+If x1 is rejected, we discard the computation of x2 and
+re-sample x1 from an adjusted distribution, and if x1 is accepted, we keep both tokens. Algorithm 1 generalizes this
+idea to sample between 1 and γ + 1 tokens at once.
+
+10
+
+E(tokens per iteration)
+
+(1)
+
+10
+
+Baseline
+=1
+=3
+=5
+=7
+=
+
+8
+
+Algorithm 1 SpeculativeDecodingStep
+Inputs: Mp , Mq , pref ix.
+. Sample γ guesses x1,...,γ from Mq autoregressively.
+for i = 1 to γ do
+qi (x) ← Mq (pref ix + [x1 , . . . , xi−1 ])
+xi ∼ qi (x)
+end for
+. Run Mp in parallel.
+p1 (x), . . . , pγ+1 (x) ←
+Mp (pref ix), . . . , Mp (pref ix + [x1 , . . . , xγ ])
+. Determine the number of accepted guesses n.
+r1 ∼ U (0, 1), . . . , rγ ∼ U (0, 1)
+(x)
+n ← min({i − 1 | 1 ≤ i ≤ γ, ri > pqii(x)
+} ∪ {γ})
+. Adjust the distribution from Mp if needed.
+p0 (x) ← pn+1 (x)
+if n < γ then
+p0 (x) ← norm(max(0, pn+1 (x) − qn+1 (x)))
+end if
+. Return one token from Mp , and n tokens from Mq .
+t ∼ p0 (x)
+return pref ix + [x1 , . . . , xn , t]
+
+1 − αγ+1
+1−α
+
+6
+
+8
+6
+
+4
+
+4
+
+2
+
+2
+
+1
+
+1
+
+0
+
+0.50
+
+0.55
+
+0.60
+
+0.65
+
+0.70
+
+0.75
+
+0.80
+
+0.85
+
+0.90
+
+0
+
+Figure 2. The expected number of tokens generated by Algorithm 1
+as a function of α for various values of γ.
+
+3.2. Calculating α
+We’ll now derive a simple formula for calculating α given a
+prefix and the two models Mp and Mq . We start by defining
+a natural divergence DLK :
+P
+Definition 3.2. DLK (p, q) =
+x |p(x) − M (x)| =
+P
+p(x)+q(x)
+|q(x)
+−
+M
+(x)|
+where
+M
+(x)
+=
+.
+x
+2
+P
+Lemma 3.3. DLK (p, q) = 1 − x min(p(x), q(x))
+P
+P
+Proof. DLK (p, q) = x |p(x) − M (x)| = x |p−q|
+=
+2
+P p+q−|p−q|
+P
+1− x
+=
+1
+−
+min(p(x),
+q(x))
+x
+2
+
+3. Analysis
+3.1. Number of Generated Tokens
+
+From Lemma 3.3 we immediately get the following results:
+
+Let’s analyze the reduction factor in the number of serial
+calls to the target model, or equivalently, the expected num-
+
+2
+As before, we’ll omit the x<t subscript whenever the prefix is
+clear from the context.
+
+3
+
+Fast Inference from Transformers via Speculative Decoding
+
+Corollary 3.4. DLK (p, q) is a symmetric divergence in [0, 1]. Corollary 3.9. If α > c, there exists γ for which we’ll get
+DLK (p, q) = 0 ⇐⇒ p = q.
+an improvement, and the improvement factor will be at least
+1+α
+DLK (p, q) = 1 ⇐⇒ p and q have disjoint support.
+1+c .
+Theorem 3.5. β = 1 − DLK (p, q)
+Proof. β
+
+=
+
+Ex∼q(x)
+
+Ex∼q(x) min(1, p(x)
+q(x) ) =
+
+(
+1
+p(x)
+q(x)
+
+q(x) ≤ p(x)
+q(x) > p(x)
+
+Proof. If we get an improvement for γ, we’d also get an
+improvement for any 0 < γ ∗ < γ, so for our method to
+yield an improvement, we can evaluate Theorem 3.8 for
+1−α2
+= 1+α
+γ = 1, yielding (1−α)(c+1)
+1+c .
+
+=
+
+P
+
+x min(p(x), q(x))
+
+3.4. Number of Arithmetic Operations
+Finally we get:
+
+Algorithm 1 does γ +1 runs of Mp in parallel, so the number
+of concurrent arithmetic operations grows by a factor of
+γ +1. Now, since Algorithm 1 produces at most γ +1 tokens
+per run, the total number of arithmetic operations might be
+higher than that of the standard decoding algorithm. When
+we accept the sample from Mq the increased concurrency
+is “free” and the total number of operations isn’t increased3 .
+When we reject a guess though, computation is wasted. Let’s
+now analyze the effect of our method on the total number
+of arithmetic operations.
+
+Corollary 3.6. α = 1 − E(DLK (p, q)) = E(min(p, q))
+See Table 3 for empirically observed α values in our experiments.
+3.3. Walltime Improvement
+We’ve shown that with the i.i.d. assumption our algorithm
+reduces the number of calls to the target model by a factor
+γ+1
+of 1−α
+1−α . Note that speculative execution in general, and
+our algorithm in particular, assume that we have enough
+compute resources to support the increased concurrency
+(Section 3.4). For the walltime anaylsis, we’ll assume that
+we can run γ + 1 concurrent evaluations of Mp in parallel
+without increasing the walltime. To get the total walltime
+improvement, we now consider the cost of running the approximation model Mq .
+
+Definition 3.10. Let ĉ be the ratio of arithmetic operations
+per token of the approximation model Mq to that of the
+target model Mp .
+Theorem 3.11. The expected factor of increase in the number of total operations of Algorithm 1 is (1−α)(γĉ+γ+1)
+.
+1−αγ+1
+Proof. Denote by T̂ the number of arithmetic operations
+done by a standard decoding baseline per token, i.e. the
+number of operations of a single run of Mp . Then a single
+iteration of Algorithm 1 costs T̂ ĉγ + T̂ (γ + 1) operations
+(for γ runs of Mq and γ + 1 parallel runs of Mp ). Dividing
+by the expected number of tokens produced by Algorithm 1,
+i.e. Equation (1), and by T̂ , we get the desired result.
+
+Definition 3.7. Let c, the cost coefficient, be the ratio between the time for a single run of Mq and the time for a
+single run of Mp .
+Note that unlike α which is an intrinsic property of the
+models and the task, the value of c depends on the hardware
+configuration and software implementation details. In our
+experiments where Mq is typically a couple of orders of
+magnitude smaller than Mp , c was always less than 0.05
+and often negligibly close to 0.
+
+If α is low, the increase in the number of arithmetic operations is high, and vice-versa. Note that for Transformer
+decoders, the total number of arithmetic operations by Algorithm 1 (not counting runs of Mq ) can be bounded from
+above by a single run of the same-size Transformer encoder.
+
+Theorem 3.8. The expected improvement factor in total
+1−αγ+1
+walltime by Algorithm 1 is (1−α)(γc+1)
+.
+Proof. Denote the cost of running a single step of Mp by T .
+Now, each run of Algorithm 1 costs T cγ + T (for running
+the approximation model Mq γ times and running Mp once)
+γ+1
+and according to Equation (1) produces 1−α
+1−α tokens on
+average. So the overall expected cost for producing a token
+with Algorithm 1 is (cγ+1)(1−α)
+T . Since the cost of pro1−αγ+1
+ducing a single token with the standard decoding algorithm
+is T , we get the desired result.
+
+Unlike the total number of arithmetic operations, the total
+number of memory accesses can go down with our method.
+Specifically, the target model’s weights and KV cache can
+be read once per execution of Algorithm 1, so the number
+of memory accesses for reading them shrinks by a factor of
+1−αγ+1
+1−α , according to Equation (1).
+3.5. Choosing γ
+Given c and α and assuming enough compute resources (see
+Section 3.4), the optimal γ is the one maximizing the wall-
+
+Note that Theorem 3.8 assumes long enough generations
+(for example, since we run Mp at least once, the improvement factor is capped by the number of generated tokens).
+
+3
+
+4
+
+Neglecting the cost of Mq .
+
+Optimal
+
+Fast Inference from Transformers via Speculative Decoding
+
+24
+23
+22
+21
+20
+19
+18
+17
+16
+15
+14
+13
+12
+11
+10
+9
+8
+7
+6
+5
+4
+3
+2
+1
+0
+
+10
+
+c = 0.01
+c = 0.02
+c = 0.05
+c = 0.1
+
+8
+6
+4
+
+0.50
+
+0.55
+
+0.60
+
+0.65
+
+0.70
+
+0.75
+
+0.80
+
+0.85
+
+Figure 3. The optimal γ as a function of α for various values of c.
+
+8
+6
+4
+
+2
+
+2
+
+1
+
+1
+
+0
+
+0.90
+
+10
+
+Speed = 1
+Ops = 1
+Speed = 3
+Ops = 3
+Speed = 5
+Ops = 5
+Speed = 7
+Ops = 7
+Speed = 10
+Ops = 10
+
+0.50
+
+0.55
+
+0.60
+
+0.65
+
+0.70
+
+0.75
+
+0.80
+
+0.85
+
+0.90
+
+0
+
+Figure 4. The speedup factor and the increase in number of arithmetic operations as a function of α for various values of γ.
+
+γ+1
+
+1−α
+time improvement equation (Theorem 3.8): (1−α)(γc+1)
+.
+Since γ is an integer, it can be easily found numerically, see
+Figure 3.
+
+3.6. Approximation Models
+Speculative sampling, and therefore speculative decoding,
+guarantee an identical output distribution for any choice
+of approximation model Mq without restriction (see Appendix A.1). In our experiments, we mostly tested existing
+off-the-shelf smaller Transformers as the approximation
+models. Further, we only tested approximation models of
+the same architecture as the target models Mp and using the
+same probability standardization. In this setup, choosing
+Mq to be around two orders of magnitude smaller than Mp
+usually performed best, balancing α and c (Theorem 3.8).
+
+Table 1 and Figure 4 illustrate the trade-off between inference speed and the total number of arithmetic operations for
+various values of α and γ, assuming c = ĉ = 0. Figure 5
+shows a simplified trace diagram.
+
+Table 1. The total number of arithmetic operations and the inference speed vs the baseline, for various values of γ and α, assuming
+c = ĉ = 0.
+α
+
+γ
+
+O PERATIONS
+
+S PEED
+
+0.6
+0.7
+0.8
+0.8
+0.9
+0.9
+
+2
+3
+2
+5
+2
+10
+
+1.53X
+1.58X
+1.23X
+1.63X
+1.11X
+1.60X
+
+1.96X
+2.53X
+2.44X
+3.69X
+2.71X
+6.86X
+
+Another type of approximation models, negligible-cost models, are those for which c ≈ 0, i.e. approximation models
+with a negligible cost relative to the target model. In this
+γ+1
+case, we get an expected walltime improvement of 1−α
+1−α ,
+1
+which is bounded from above by 1−α
+(we approach equality if γ is large). One interesting type of negligible-cost
+approximation models are n-gram models, where the evaluation amounts to a table lookup. Interestingly, in empirical
+tests (Section 4.2) we get non zero αs even for these trivial n-gram models. For example, for the English-German
+translation task, with Mp being T5-XXL 11B and Mq being
+a trivial bigram model, we get α ≈ 0.2 which leads to an
+inference speed improvement factor of 1.25X with γ = 3.
+
+Instead of picking a single value for γ based on α, since the
+βs aren’t constant, we could get further improvement by predicting the value of β and accordingly varying the value of γ
+during the run of Algorithm 1. To get an upper bound on the
+additional improvement factor, assume we had an oracle for
+1
+γ. We would then have E(# generated tokens) = 1−α
+.
+For typical values of c and α, and assuming unbounded compute resources, the enhanced walltime improvement factor
+can be up to ∼60% higher than the improvement factor with
+a fixed γ. We leave exploring this for future work4 .
+
+Other simple heuristics can be used as negligible-cost approximation models. For example, in cases where long sequences are likely to repeat, such as for summarization tasks
+or chat-like interfaces 5 , an approximation model that simply
+
+4
+
+5
+
+The above bound assumes that we still run Mp to verify the oracle’s predictions. If we skip those verifications the bound doesn’t
+hold and we would get a substantial additional improvement.
+
+E.g. where a user and a language model iterate on content, like
+text or code (“can you rewrite this story but change the ending”,
+“can you make this function also do X”).
+
+5
+
+Fast Inference from Transformers via Speculative Decoding
+
+Base
+
+=3
+
+=7
+
+Mp encoder
+Mq encoder
+Mp decoder
+Mq decoder
+
+Wall time
+
+Figure 5. A simplified trace diagram for a full encoder-decoder Transformer stack. The top row shows speculative decoding with γ = 7
+so each of the calls to Mp (the purple blocks) is preceded by 7 calls to Mq (the blue blocks). The yellow block on the left is the call to the
+encoder for Mp and the orange block is the call to the encoder for Mq . Likewise the middle row shows speculative decoding with γ = 3,
+and the bottom row shows standard decoding.
+
+approximation models. As expected we see that α increases
+with the size of the approximation model. Interestingly, α
+and walltime improvement are higher for argmax sampling
+(temp=0). We observe speedups of 2.6X (temp=1) and 3.4X
+(temp=0) on the translation task and slightly lower speedups
+of 2.3X (temp=1) and 3.1X (temp=0) for the summarization
+task. These empirical results match well with the theoretical predictions, with some variance due to implementation
+details (see Appendix A.3).
+
+copies tokens from the context in case we find a matching
+prefix, might yield high values of α. These parameter-less
+approximation models, have the additional advantage of
+being even simpler to deploy from a production standpoint.
+Another type of approximation models that can be used by
+speculative decoding are non-autoregressive models, like
+those from (Stern et al., 2018). Then, instead of the autogreressive loop in Algorithm 1 we’d just call the nonautoregressive model once.
+A final example, interesting mostly from a theoretical perspective, is an approximation model which chooses tokens
+at random, which guarantees some improvement (although
+very small) for all models Mp .
+
+Table 2. Empirical results for speeding up inference from a T5XXL 11B model.
+
+4. Experiments
+4.1. Empirical Walltime Improvement
+We implement our algorithm and compare it to the implementation in the T5X codebase for accelerating T5-XXL.
+Setup We test a standard encoder-decoder T5 version 1.1
+model (Raffel et al., 2020) on two tasks from the T5 paper:
+(1) English to German translation fine tuned on WMT EnDe,
+and (2) Text summarization fine tuned on CCN/DM. For
+both tasks, we use T5-XXL (11B) for Mp . For the approximation model Mq we test several existing configurations,
+namely T5-large (800M), T5-base (250M), and T5-small
+(77M) (Raffel et al., 2020). We use existing checkpoints
+for all models. We measure walltime improvements with a
+batch size of 1 on a single TPU-v4 for both argmax sampling
+(temp=0) and standard sampling (temp=1).
+
+TASK
+
+Mq
+
+T EMP
+
+γ
+
+α
+
+S PEED
+
+ENDE
+ENDE
+ENDE
+ENDE
+ENDE
+ENDE
+
+T5- SMALL F
+T5- BASE
+T5- LARGE
+T5- SMALL F
+T5- BASE
+T5- LARGE
+
+0
+0
+0
+1
+1
+1
+
+7
+7
+7
+7
+5
+3
+
+0.75
+0.8
+0.82
+0.62
+0.68
+0.71
+
+3.4X
+2.8X
+1.7X
+2.6X
+2.4X
+1.4X
+
+CNNDM
+CNNDM
+CNNDM
+CNNDM
+CNNDM
+CNNDM
+
+T5- SMALL F
+T5- BASE
+T5- LARGE
+T5- SMALL F
+T5- BASE
+T5- LARGE
+
+0
+0
+0
+1
+1
+1
+
+5
+5
+3
+5
+3
+3
+
+0.65
+0.73
+0.74
+0.53
+0.55
+0.56
+
+3.1X
+3.0X
+2.2X
+2.3X
+2.2X
+1.7X
+
+4.2. Empirical α Values
+While we only implemented our method for T5, we measured α values for various tasks, sampling methods, target
+models Mp , and approximation models Mq . Specifically,
+we evaluated the expectation from Corollary 3.6 on 10K
+tokens generated by Mp , for each of the settings below.
+GPT-like (97M params) We test a decoder-only Transformer model on unconditional language generation, trained
+on lm1b (Chelba et al., 2013). The model here is a GPTlike Transformer decoder with Gelu activations (Hendrycks
+& Gimpel, 2016). For Mq we experimented with a Trans-
+
+Results Table 2 shows the empirical results from our
+method. We see that T5-small (77M), with a good balance
+of c and α, provides the highest speedup out of the tested
+6
+
+Fast Inference from Transformers via Speculative Decoding
+
+former decoder model with 6M parameters: dim 256, dim
+feed-forward 1024, 2 layers, 4 attention heads, as well as
+simple unigram and bigram models. Mp has 97M parameters: dim 768, dim feed-forward 3072, 12 layers, 12 attention heads. We used Bert tokenization (Devlin et al., 2019)
+with 8k tokens for all models.
+
+Table 3. Empirical α values for various target models Mp , approximation models Mq , and sampling settings. T=0 and T=1 denote
+argmax and standard sampling respectively6 .
+
+LaMDA (137B params) We tested a decoder only
+LaMDA model on a dialog task (Thoppilan et al., 2022).
+We used existing checkpoints from LaMDA 137B as Mp
+and LaMDA 8B, LaMDA 2B, and LaMDA 100M for Mq .
+See Section 4.1 for the setup of the T5-XXL (11B params)
+model.
+Table 3 summarizes the α values for the tested cases. We
+observe that approximation models that are a couple of
+orders of magnitude smaller than the target model tend to
+produce α values between 0.5 and 0.9. Interestingly, we also
+note that for all models, the sharper the adjusted distribution,
+the higher the α values. Finally, we note that even trivial
+unigram and bigram approximations yield non negligible
+α values. For example, for the case of English to German
+translation, the bigram model has an α value of 0.2, and
+since c = 0 in this case, yields a 1.25X speed improvement,
+which is surprisingly high for this trivial approximation
+model (but is still lower than the speedup we get from using
+T5-small as the approximation model).
+
+5. Related work
+The efficiency of inference from large models was studied
+extensively (Dehghani et al., 2021). Many approaches aim
+to speed up inference from large models in general, and autoregressive models like Transformers in particular. Numerous techniques try to make inference more efficient for all
+tokens, e.g. distillation (Hinton et al., 2015), sparcification
+(Jaszczur et al., 2021), quantization (Hubara et al., 2016),
+and architecture modification (So et al., 2021; Shazeer,
+2019). Closer to our approach are adaptive computation
+methods which adapt the amount of computation to problem
+difficulty (Han et al., 2021). Examples include attending to a
+subset of the inputs (Sukhbaatar et al., 2019), and early exits
+(Schuster et al., 2021; Scardapane et al., 2020; Bapna et al.,
+2020; Elbayad et al., 2019; Schwartz et al., 2020). Notably,
+Wisdom of Committees (Schwartz et al., 2020) leverages
+off-the-shelf smaller models, but is an adaptive computation
+approach, and so it uses a heuristic to determine when to
+stop, losing the guarantee of identical outputs to those of
+the target models. In general, adaptive computation methods usually learn, either within the model itself or with an
+auxiliary model, when a computation shortcut can be taken.
+Usually, these methods save on both inference time and
+arithmetic operations, but require a change of architecture, a
+change of training procedure and training custom models or
+
+Mp
+
+Mq
+
+S MPL
+
+α
+
+GPT- LIKE (97M)
+GPT- LIKE (97M)
+GPT- LIKE (97M)
+GPT- LIKE (97M)
+GPT- LIKE (97M)
+GPT- LIKE (97M)
+
+U NIGRAM
+B IGRAM
+GPT- LIKE (6M)
+U NIGRAM
+B IGRAM
+GPT- LIKE (6M)
+
+T =0
+T =0
+T =0
+T =1
+T =1
+T =1
+
+0.03
+0.05
+0.88
+0.03
+0.05
+0.89
+
+T5-XXL (E N D E )
+T5-XXL (E N D E )
+T5-XXL (E N D E )
+T5-XXL (E N D E )
+T5-XXL (E N D E )
+T5-XXL (E N D E )
+T5-XXL (E N D E )
+T5-XXL (E N D E )
+T5-XXL (E N D E )
+T5-XXL (E N D E )
+
+U NIGRAM
+B IGRAM
+T5- SMALL
+T5- BASE
+T5- LARGE
+U NIGRAM
+B IGRAM
+T5- SMALL
+T5- BASE
+T5- LARGE
+
+T =0
+T =0
+T =0
+T =0
+T =0
+T =1
+T =1
+T =1
+T =1
+T =1
+
+0.08
+0.20
+0.75
+0.80
+0.82
+0.07
+0.19
+0.62
+0.68
+0.71
+
+T5-XXL (CNNDM)
+T5-XXL (CNNDM)
+T5-XXL (CNNDM)
+T5-XXL (CNNDM)
+T5-XXL (CNNDM)
+T5-XXL (CNNDM)
+T5-XXL (CNNDM)
+T5-XXL (CNNDM)
+T5-XXL (CNNDM)
+T5-XXL (CNNDM)
+
+U NIGRAM
+B IGRAM
+T5- SMALL
+T5- BASE
+T5- LARGE
+U NIGRAM
+B IGRAM
+T5- SMALL
+T5- BASE
+T5- LARGE
+
+T =0
+T =0
+T =0
+T =0
+T =0
+T =1
+T =1
+T =1
+T =1
+T =1
+
+0.13
+0.23
+0.65
+0.73
+0.74
+0.08
+0.16
+0.53
+0.55
+0.56
+
+L A MDA (137B)
+L A MDA (137B)
+L A MDA (137B)
+L A MDA (137B)
+L A MDA (137B)
+L A MDA (137B)
+
+L A MDA (100M)
+L A MDA (2B)
+L A MDA (8B)
+L A MDA (100M)
+L A MDA (2B)
+L A MDA (8B)
+
+T =0
+T =0
+T =0
+T =1
+T =1
+T =1
+
+0.61
+0.71
+0.75
+0.57
+0.71
+0.74
+
+re-training of existing models. They usually also change the
+outputs of the model. We note that while many of the methods above improve the memory to arithmetic-operations
+ratio, in cases where the ratio remains high, these methods
+and our speculative decoding method might be effective in
+tandem.
+Two prior methods leverage speculative execution for speeding up decoding from autoregressive models. Blockwise
+Parallel Decoding (Stern et al., 2018) decodes several tokens in parallel, similarly to our work. However, it only
+supports greedy decoding (temperature=0) and not the general stochastic setting, it requires additional training of a
+custom model, and focuses on preserving down-stream task
+quality, instead of guaranteeing identical outputs. Shallow
+Aggressive Decoding (SAD) (Sun et al., 2021) also decodes
+several tokens in parallel, similarly to our work. Unlike
+our work, SAD only supports copying the input to the out7
+
+Fast Inference from Transformers via Speculative Decoding
+
+put, and not general approximation models, making it only
+suitable for the cases where the inputs and outputs are very
+similar like grammatical error correction. In addition, similarly to Blockwise Parallel Decoding, SAD does not support
+the general stochastic sampling setting.
+
+experiments we always performed the same standardization
+on the distributions generated by the approximation model
+as the desired one for the target model (Section 2.2), but further improvements might be obtained by applying different
+transformations. We tested speculative decoding only in the
+text modality, but it might work well in other domains (e.g.
+images) which would be interesting to experiment with.
+
+After we initially published our work, an independent implementation of speculative decoding (Chen et al., 2023)
+showed similar 2X-2.5X improvements on Chinchilla 70B.
+
+Finally, we note that stochastic speculative execution and
+speculative sampling can be helpful outside the scope of
+speculative decoding from autoregressive models. For example, given two slow functions, f (x) and g(y) such that
+f (x) generates a distribution from which g’s input is sampled, we could use our method to run f and g in parallel.
+This setup might arise e.g. in physics simulations, or in reinforcement learning where f is a large model that produces a
+distribution on actions, and g is the world simulation, which
+would be interesting to explore.
+
+6. Discussion
+We presented speculative sampling which enables efficient
+stochastic speculative execution - i.e. speculative execution in the stochastic setting. We analyzed its impact on
+decoding from autoregressive models like Transformers via
+speculative decoding and have shown that given enough
+compute resources, we get meaningful 2X-3X speedups in
+practice vs T5X, a popular optimized implementation.
+
+Acknowledgments
+
+One limitation of speculative execution in general, and of
+speculative decoding in particular, is that latency is improved through increased concurrency at the cost of an increased number of arithmetic operations. Thus, our method
+is not helpful for configurations where additional computation resources are not available. However, in common
+cases where additional computation resources are available
+(e.g. when memory bandwidth is the bottleneck) our method
+provides the speedup with significant benefits: the model
+architecture doesn’t change, retraining isn’t required, and
+most importantly, the output distribution is guaranteed to
+stay the same. Our method is easy to implement, and can
+be used to speedup inference using out-of-the-box models
+without developing and evaluating custom schemes.
+
+We would like to extend a special thank you to YaGuang Li
+for help with everything LaMDA related and for calculating
+the LaMDA figures in the paper, and to Blake Hechtman
+for great insights and help with XLA. We would also like
+to thank the reviewers for insightful comments, as well
+as Asaf Aharoni, Reiner Pope, Sasha Goldshtein, Nadav
+Sherman, Eyal Segalis, Eyal Molad, Dani Valevski, Daniel
+Wasserman, Valerie Nygaard, Danny Vainstein, the LaMDA
+and Theta Labs teams at Google, and our families.
+
+References
+Bapna, A., Arivazhagan, N., and Firat, O. Controlling
+computation versus quality for neural sequence models.
+ArXiv, abs/2002.07106, 2020.
+
+There are several directions for follow up research, importantly, further investigating the compatibility of speculative
+decoding with beam search (see Appendix A.4). Also, while
+our method yields substantial speedups with existing off-theshelf approximation models, greater improvements might
+be obtained via custom approximation models (Section 3.6),
+such as those with custom architectures (e.g. custom sizes,
+non-autoregressive models, or various heuristics) or with
+custom training procedures (e.g. standard distillation with
+soft targets from Mp , or optimizing Mq for α directly). It
+could also be interesting to explore a hierarchical version
+of the algorithm, where the approximation model is itself
+accelerated by an even faster model, which could allow
+for more capable approximation models. In this work we
+fixed the approximation model and the number of guesses
+γ throughout inference, but varying them during inference
+could yield additional improvements (Section 3.5). In our
+
+Brown, T. B., Mann, B., Ryder, N., Subbiah, M., Kaplan,
+J., Dhariwal, P., Neelakantan, A., Shyam, P., Sastry, G.,
+Askell, A., Agarwal, S., Herbert-Voss, A., Krueger, G.,
+Henighan, T., Child, R., Ramesh, A., Ziegler, D. M., Wu,
+J., Winter, C., Hesse, C., Chen, M., Sigler, E., Litwin, M.,
+Gray, S., Chess, B., Clark, J., Berner, C., McCandlish,
+S., Radford, A., Sutskever, I., and Amodei, D. Language models are few-shot learners. In Proceedings of
+the 34th International Conference on Neural Information Processing Systems, NIPS’20, Red Hook, NY, USA,
+2020. Curran Associates Inc. ISBN 9781713829546.
+Burton, F. W. Speculative computation, parallelism, and
+functional programming. IEEE Transactions on Computers, C-34(12):1190–1193, 1985. doi: 10.1109/TC.1985.
+6312218.
+
+6
+Note that the outputs from the LaMDA model always go
+through a T op40 filter. This has no effect on argmax, but does
+have some effect on standard sampling.
+
+Chelba, C., Mikolov, T., Schuster, M., Ge, Q., Brants, T.,
+Koehn, P. T., and Robinson, T. One billion word bench8
+
+Fast Inference from Transformers via Speculative Decoding
+
+mark for measuring progress in statistical language modeling. In Interspeech, 2013.
+
+Jaszczur, S., Chowdhery, A., Mohiuddin, A., Kaiser, L.,
+Gajewski, W., Michalewski, H., and Kanerva, J. Sparse
+is enough in scaling transformers. In Neural Information
+Processing Systems, 2021.
+
+Chen, C., Borgeaud, S., Irving, G., Lespiau, J.-B., Sifre,
+L., and Jumper, J. M. Accelerating large language
+model decoding with speculative sampling. ArXiv,
+abs/2302.01318, 2023.
+
+Raffel, C., Shazeer, N., Roberts, A., Lee, K., Narang, S.,
+Matena, M., Zhou, Y., Li, W., and Liu, P. J. Exploring
+the limits of transfer learning with a unified text-to-text
+transformer. The Journal of Machine Learning Research,
+21(1):5485–5551, 2020.
+
+Chowdhery, A., Narang, S., Devlin, J., Bosma, M., Mishra,
+G., Roberts, A., Barham, P., Chung, H. W., Sutton, C.,
+Gehrmann, S., Schuh, P., Shi, K., Tsvyashchenko, S.,
+Maynez, J., Rao, A., Barnes, P., Tay, Y., Shazeer, N. M.,
+Prabhakaran, V., Reif, E., Du, N., Hutchinson, B. C.,
+Pope, R., Bradbury, J., Austin, J., Isard, M., Gur-Ari,
+G., Yin, P., Duke, T., Levskaya, A., Ghemawat, S., Dev,
+S., Michalewski, H., Garcı́a, X., Misra, V., Robinson,
+K., Fedus, L., Zhou, D., Ippolito, D., Luan, D., Lim,
+H., Zoph, B., Spiridonov, A., Sepassi, R., Dohan, D.,
+Agrawal, S., Omernick, M., Dai, A. M., Pillai, T. S., Pellat, M., Lewkowycz, A., Moreira, E., Child, R., Polozov,
+O., Lee, K., Zhou, Z., Wang, X., Saeta, B., Dı́az, M., Firat, O., Catasta, M., Wei, J., Meier-Hellstern, K. S., Eck,
+D., Dean, J., Petrov, S., and Fiedel, N. Palm: Scaling language modeling with pathways. ArXiv, abs/2204.02311,
+2022.
+
+Roberts, A., Chung, H. W., Levskaya, A., Mishra, G., Bradbury, J., Andor, D., Narang, S., Lester, B., Gaffney, C.,
+Mohiuddin, A., Hawthorne, C., Lewkowycz, A., Salcianu,
+A., van Zee, M., Austin, J., Goodman, S., Soares, L. B.,
+Hu, H., Tsvyashchenko, S., Chowdhery, A., Bastings,
+J., Bulian, J., Garcı́a, X., Ni, J., Chen, A., Kenealy, K.,
+Clark, J., Lee, S., Garrette, D. H., Lee-Thorp, J., Raffel,
+C., Shazeer, N. M., Ritter, M., Bosma, M., Passos, A.,
+Maitin-Shepard, J. B., Fiedel, N., Omernick, M., Saeta,
+B., Sepassi, R., Spiridonov, A., Newlan, J., and Gesmundo, A. Scaling up models and data with t5x and
+seqio. ArXiv, abs/2203.17189, 2022.
+Scardapane, S., Scarpiniti, M., Baccarelli, E., and Uncini,
+A. Why should we add early exits to neural networks?
+Cognitive Computation, 12(5):954–966, 2020.
+
+Dehghani, M., Arnab, A., Beyer, L., Vaswani, A., and Tay,
+Y. The efficiency misnomer. ArXiv, abs/2110.12894,
+2021.
+
+Schuster, T., Fisch, A., Jaakkola, T., and Barzilay, R. Consistent accelerated inference via confident adaptive transformers. In Conference on Empirical Methods in Natural
+Language Processing, 2021.
+
+Devlin, J., Chang, M.-W., Lee, K., and Toutanova, K. Bert:
+Pre-training of deep bidirectional transformers for language understanding. ArXiv, abs/1810.04805, 2019.
+
+Schwartz, R., Stanovsky, G., Swayamdipta, S., Dodge, J.,
+and Smith, N. A. The right tool for the job: Matching
+model and instance complexities. In Annual Meeting of
+the Association for Computational Linguistics, 2020.
+
+Elbayad, M., Gu, J., Grave, E., and Auli, M. Depth-adaptive
+transformer. ArXiv, abs/1910.10073, 2019.
+Han, Y., Huang, G., Song, S., Yang, L., Wang, H., and Wang,
+Y. Dynamic neural networks: A survey. IEEE Transactions on Pattern Analysis and Machine Intelligence, 44:
+7436–7456, 2021.
+
+Shazeer, N. M. Fast transformer decoding: One write-head
+is all you need. ArXiv, abs/1911.02150, 2019.
+
+Hendrycks, D. and Gimpel, K. Bridging nonlinearities and
+stochastic regularizers with gaussian error linear units.
+ArXiv, abs/1606.08415, 2016.
+
+So, D. R., Ma’nke, W., Liu, H., Dai, Z., Shazeer, N. M., and
+Le, Q. V. Primer: Searching for efficient transformers for
+language modeling. ArXiv, abs/2109.08668, 2021.
+
+Hennessy, J. L. and Patterson, D. A. Computer Architecture:
+A Quantitative Approach. Morgan Kaufmann, Amsterdam, 5 edition, 2012. ISBN 978-0-12-383872-8.
+
+Stern, M., Shazeer, N., and Uszkoreit, J. Blockwise parallel
+decoding for deep autoregressive models. Advances in
+Neural Information Processing Systems, 31, 2018.
+
+Hinton, G. E., Vinyals, O., and Dean, J. Distilling the
+knowledge in a neural network. ArXiv, abs/1503.02531,
+2015.
+
+Sukhbaatar, S., Grave, E., Bojanowski, P., and Joulin, A.
+Adaptive attention span in transformers. In Annual Meeting of the Association for Computational Linguistics,
+2019.
+
+Hubara, I., Courbariaux, M., Soudry, D., El-Yaniv, R., and
+Bengio, Y. Quantized neural networks: Training neural networks with low precision weights and activations.
+ArXiv, abs/1609.07061, 2016.
+
+Sun, X., Ge, T., Wei, F., and Wang, H. Instantaneous grammatical error correction with shallow aggressive decoding.
+ArXiv, abs/2106.04970, 2021.
+9
+
+Fast Inference from Transformers via Speculative Decoding
+
+Thoppilan, R., Freitas, D. D., Hall, J., Shazeer, N. M., Kulshreshtha, A., Cheng, H.-T., Jin, A., Bos, T., Baker, L.,
+Du, Y., Li, Y., Lee, H., Zheng, H., Ghafouri, A., Menegali, M., Huang, Y., Krikun, M., Lepikhin, D., Qin, J.,
+Chen, D., Xu, Y., Chen, Z., Roberts, A., Bosma, M.,
+Zhou, Y., Chang, C.-C., Krivokon, I. A., Rusch, W. J.,
+Pickett, M., Meier-Hellstern, K. S., Morris, M. R., Doshi,
+T., Santos, R. D., Duke, T., Søraker, J. H., Zevenbergen, B., Prabhakaran, V., Dı́az, M., Hutchinson, B., Olson, K., Molina, A., Hoffman-John, E., Lee, J., Aroyo,
+L., Rajakumar, R., Butryna, A., Lamm, M., Kuzmina,
+V. O., Fenton, J., Cohen, A., Bernstein, R., Kurzweil, R.,
+Aguera-Arcas, B., Cui, C., Croak, M., hsin Chi, E. H., and
+Le, Q. Lamda: Language models for dialog applications.
+ArXiv, abs/2201.08239, 2022.
+Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones,
+L., Gomez, A. N., Kaiser, Ł., and Polosukhin, I. Attention is all you need. Advances in neural information
+processing systems, 30, 2017.
+Yu, J., Xu, Y., Koh, J. Y., Luong, T., Baid, G., Wang, Z.,
+Vasudevan, V., Ku, A., Yang, Y., Ayan, B. K., Hutchinson,
+B. C., Han, W., Parekh, Z., Li, X., Zhang, H., Baldridge,
+J., and Wu, Y. Scaling autoregressive models for contentrich text-to-image generation. ArXiv, abs/2206.10789,
+2022.
+
+10
+
+Fast Inference from Transformers via Speculative Decoding
+
+A. Appendix
+A.1. Correctness of Speculative Sampling
+We will now show that for any distributions p(x) and q(x), the tokens sampled via speculative sampling from p(x) and q(x)
+are distributed identically to those sampled from p(x) alone. Let β be the acceptance probability (Definition 3.1).
+Note that as p0 (x) = norm(max(0, p(x) − q(x))) = P 0 p(x)−min(q(x),p(x))
+= p(x)−min(q(x),p(x))
+, the normalizing
+0
+0
+0
+1−β
+x (p(x )−min(q(x ),p(x )))
+0
+constant for the adjusted distribution p (x) is 1 − β, where the last equation follows immediately from Lemma 3.3 and
+Theorem 3.5.
+Now:
+P (x = x0 ) = P (guess accepted, x = x0 ) + P (guess rejected, x = x0 )
+Where:
+P (guess accepted, x = x0 ) = q(x0 ) min(1,
+
+p(x0 )
+) = min(q(x0 ), p(x0 ))
+q(x0 )
+
+And:
+P (guess rejected, x = x0 ) = (1 − β)p0 (x0 ) = p(x0 ) − min(q(x0 ), p(x0 ))
+Overall:
+P (x = x0 ) = min(p(x0 ), q(x0 )) + p(x0 ) − min(p(x0 ), q(x0 )) = p(x0 ).
+As desired. 
+A.2. Speculative Sampling vs. Rejection Sampling
+Rejection sampling is the following iterative sampling procedure that looks superficially similar to ours:
+1. Sample x ∼ q(x) and r ∼ U (0, 1).
+2. If r < Mp(x)
+q(x) return x.
+3. Go to 1.
+Where M = maxx p(x)
+q(x) . We could employ a non-iterative version of rejection sampling instead of speculative sampling
+- specifically go through steps 1 and 2 above, and otherwise sample from an unmodified p(x) directly. That would
+be much less efficient than our method though. Specifically, the expected accept probability here is Ex∼q(x) Mp(x)
+q(x) =
+P
+P
+P
+q(x0 )
+q(x)
+0
+x p(x) minx p(x0 ) ≤
+x p(x) min(1, p(x) ) =
+x min(p(x), q(x)) = α is (potentially much) lower than the expected
+accept probability in our method α.
+A.3. Theoretical Predictions vs. Empirical Runtimes
+Table 4 compares the expected runtime improvements based on Theorem 3.8 to the empirically measured runtimes from
+Table 2. We estimated the values of c for the various models based on profiler traces. We can see that the theoretical
+predictions mostly match the measured runtimes. The larger differences are due to: (1) optimization differences between our
+implementation and the baseline, and (2) the simplifying assumption that the βs are i.i.d. being only an approximation (see
+Section 3.1).
+11
+
+Fast Inference from Transformers via Speculative Decoding
+Table 4. Expected improvement factor (E XP) vs. empirically measured improvement factor (E MP).
+TASK
+
+Mq
+
+T EMP
+
+γ
+
+α
+
+c
+
+E XP
+
+E MP
+
+ENDE
+ENDE
+ENDE
+ENDE
+ENDE
+ENDE
+
+T5- SMALL
+T5- BASE
+T5- LARGE
+T5- SMALL
+T5- BASE
+T5- LARGE
+
+0
+0
+0
+1
+1
+1
+
+7
+7
+7
+7
+5
+3
+
+0.75
+0.8
+0.82
+0.62
+0.68
+0.71
+
+0.02
+0.04
+0.11
+0.02
+0.04
+0.11
+
+3.2
+3.3
+2.5
+2.3
+2.4
+2.0
+
+3.4
+2.8
+1.7
+2.6
+2.4
+1.4
+
+CNNDM
+CNNDM
+CNNDM
+CNNDM
+CNNDM
+CNNDM
+
+T5- SMALL
+T5- BASE
+T5- LARGE
+T5- SMALL
+T5- BASE
+T5- LARGE
+
+0
+0
+0
+1
+1
+1
+
+5
+5
+3
+5
+3
+3
+
+0.65
+0.73
+0.74
+0.53
+0.55
+0.56
+
+0.02
+0.04
+0.11
+0.02
+0.04
+0.11
+
+2.4
+2.6
+2.0
+1.9
+1.8
+1.6
+
+3.1
+3.0
+2.2
+2.3
+2.2
+1.7
+
+A.4. Application to Beam Search
+Our method can be applied, with some performance penalty, to beam search sampling. Given the original beam width w, we
+can perform beam search with the approximation model Mq and beam width u ≥ w for γ steps. Then, we can use Mp to
+check all of the candidates in parallel (costing a compute budget of (w + uγ) runs of Mp ). Finally, for each step, we can
+accept the guesses of Mq as long as topw (Mp ) ⊆ topu (Mq ) to get identical results to regular beam search with Mp alone
+(with a more elaborate procedure we could also accept cases where the candidates we got happen to have higher probabilities
+than those of Mp alone). The analysis of our method in this setting is more involved and we leave it for future work.
+A.5. Lenience
+A strong property of Algorithm 1 is that the output distribution is guaranteed to remain unchanged. That said, if we’re
+willing to allow some changes, with nice guarantees, we can get further inference speed improvements. To further motivate
+this, note that when we train two models with identical architectures and sizes on the same dataset, the generated probability
+distributions will not be identical, so some lenience might make sense. Note that the results in this paper except for this
+section use the strictest version of Algorithm 1 and don’t allow lenience of any kind.
+We could include a lenience parameter l ∈ [0, 1] and multiply q(x) by l before comparing with p(x) in Algorithm 1. This
+still maintains the nice guarantee that no token can be sampled with probability greater than p(x)
+l . This means for example,
+1
+that with l = 10
+no token can be sampled with more than 10X its ground truth probability, so we can guarantee that
+extremely rare tokens will remain extremely rare (there is no guarantee on the minimum probability, so lenience could hurt
+the diversity of the samples).
+(
+1
+lq(x) ≤ p(x)
+p(x)
+Specifically, with a lenience factor l we have α = Ex∼q(x) p(x)
+= Ex∼q(x) max(p(x),lq(x))
+=
+lq(x)
+>
+p(x)
+lq(x)
+P
+P
+P
+p(x)q(x)
+p(x)
+1
+x max(p(x),lq(x)) = l
+x min(p(x), lq(x)) =
+x min( l , q(x)).
+Table 5 shows α values for different values of l when Mp is T5-XXL (11B) and Mq is T5-small (77M). With c = 0.015,
+using lenience values of 1, 0.5, 0.3, and 0.1 (meaning that no token can be sampled with probability greater than 1X, 2X, 3X
+and 10X of the ground truth) we get improvement factors of 2.5X, 3.1X, 3.6X, and 5X respectively.
+
+Table 5. α values for various values of l with standard sampling where Mp is T5-XXL (11B) on the EnDe translation task.
+Mq
+
+l=1
+
+l = 0.5
+
+l = 0.3
+
+l = 0.1
+
+U NIGRAM
+B IGRAM
+T5- SMALL (77M)
+T5- BASE (250M)
+
+0.07
+0.19
+0.62
+0.68
+
+0.1
+0.23
+0.71
+0.8
+
+0.11
+0.25
+0.76
+0.83
+
+0.16
+0.32
+0.84
+0.90
+
+12
+
+Fast Inference from Transformers via Speculative Decoding
+
+Note that when using temperature = 0 (i.e. argmax sampling), we can no longer use lenience as above. Instead, we could
+allow some lenience before standardizing the distributions. For example, we could accept the token x sampled from Mq in
+case p(x) ≤ l · max(p). In this case, we measure similar empirical increases in α values to those with temperature = 1. For
+example, when using lenience values of 1, 0.5, 0.3, and 0.1 for Mp T5-XXL Mq T5-small for English-German translation,
+we get α values of 0.75, 0.75, 0.8, 0.87. Taking for example c = 0.015 and γ = 8 we get speed improvement factors of
+3.3X, 3.3X, 3.9X, and 4.9X respectively7 .
+
+7
+
+In this case, unlike in the standard sampling case shown in Table 5, a lenience factor of 0.5 doesn’t improve the speed-up.
+
+13

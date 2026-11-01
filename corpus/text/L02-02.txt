@@ -1,0 +1,603 @@
+BERT for Joint Intent Classification and Slot Filling
+
+arXiv:1902.10909v1 [cs.CL] 28 Feb 2019
+
+Qian Chen∗, Zhu Zhuo, Wen Wang
+Speech Lab, DAMO Academy, Alibaba Group
+{tanqing.cq, zhuozhu.zz, w.wang}@alibaba-inc.com
+
+1
+
+Abstract
+
+Query
+
+Intent classification and slot filling are two
+essential tasks for natural language understanding. They often suffer from small-scale
+human-labeled training data, resulting in poor
+generalization capability, especially for rare
+words. Recently a new language representation model, BERT (Bidirectional Encoder
+Representations from Transformers), facilitates pre-training deep bidirectional representations on large-scale unlabeled corpora, and
+has created state-of-the-art models for a wide
+variety of natural language processing tasks
+after simple fine-tuning. However, there has
+not been much effort on exploring BERT for
+natural language understanding. In this work,
+we propose a joint intent classification and
+slot filling model based on BERT. Experimental results demonstrate that our proposed
+model achieves significant improvement on
+intent classification accuracy, slot filling F1,
+and sentence-level semantic frame accuracy
+on several public benchmark datasets, compared to the attention-based recurrent neural
+network models and slot-gated models.
+
+Frame
+
+Introduction
+
+In recent years, a variety of smart speakers have
+been deployed and achieved great success, such as
+Google Home, Amazon Echo, Tmall Genie, which
+facilitate goal-oriented dialogues and help users
+to accomplish their tasks through voice interactions. Natural language understanding (NLU) is
+critical to the performance of goal-oriented spoken dialogue systems. NLU typically includes the
+intent classification and slot filling tasks, aiming
+to form a semantic parse for user utterances. Intent classification focuses on predicting the intent
+of the query, while slot filling extracts semantic
+concepts. Table 1 shows an example of intent classification and slot filling for user query “Find me
+a movie by Steven Spielberg”.
+∗
+
+Ongoing work.
+
+Find me a movie by Steven Spielberg
+Intent find movie
+genre = movie
+Slot
+directed by = Steven Spielberg
+
+Table 1: An example from user query to semantic
+frame.
+
+Intent classification is a classification problem
+that predicts the intent label y i and slot filling is
+a sequence labeling task that tags the input word
+sequence x = (x1 , x2 , · · · , xT ) with the slot label
+sequence y s = (y1s , y2s , · · · , yTs ). Recurrent neural network (RNN) based approaches, particularly
+gated recurrent unit (GRU) and long short-term
+memory (LSTM) models, have achieved state-ofthe-art performance for intent classification and
+slot filling. Recently, several joint learning methods for intent classification and slot filling were
+proposed to exploit and model the dependencies
+between the two tasks and improve the performance over independent models (Guo et al., 2014;
+Hakkani-Tür et al., 2016; Liu and Lane, 2016; Goo
+et al., 2018). Prior work has shown that attention
+mechanism (Bahdanau et al., 2014) helps RNNs
+to deal with long-range dependencies. Hence,
+attention-based joint learning methods were proposed and achieved the state-of-the-art performance for joint intent classification and slot filling (Liu and Lane, 2016; Goo et al., 2018).
+Lack of human-labeled data for NLU and other
+natural language processing (NLP) tasks results
+in poor generalization capability. To address the
+data sparsity challenge, a variety of techniques
+were proposed for training general purpose language representation models using an enormous
+amount of unannotated text, such as ELMo (Peters et al., 2018) and Generative Pre-trained Transformer (GPT) (Radford et al., 2018). Pre-trained
+models can be fine-tuned on NLP tasks and have
+achieved significant improvement over training on
+
+task-specific annotated data. More recently, a pretraining technique, Bidirectional Encoder Representations from Transformers (BERT) (Devlin
+et al., 2018), was proposed and has created stateof-the-art models for a wide variety of NLP tasks,
+including question answering (SQuAD v1.1), natural language inference, and others.
+However, there has not been much effort in exploring BERT for NLU. The technical contributions in this work are two folds: 1) we explore
+the BERT pre-trained model to address the poor
+generalization capability of NLU; 2) we propose
+a joint intent classification and slot filling model
+based on BERT and demonstrate that the proposed model achieves significant improvement on
+intent classification accuracy, slot filling F1, and
+sentence-level semantic frame accuracy on several
+public benchmark datasets, compared to attentionbased RNN models and slot-gated models.
+
+2
+
+Related work
+
+Deep learning models have been extensively explored in NLU. According to whether intent classification and slot filling are modeled separately
+or jointly, we categorize NLU models into independent modeling approaches and joint modeling
+approaches.
+Approaches for intent classification include CNN (Kim, 2014; Zhang et al., 2015),
+LSTM (Ravuri and Stolcke, 2015), attentionbased CNN (Zhao and Wu, 2016), hierarchical
+attention networks (Yang et al., 2016), adversarial
+multi-task learning (Liu et al., 2017), and others.
+Approaches for slot filling include CNN (Vu,
+2016), deep LSTM (Yao et al., 2014), RNNEM (Peng et al., 2015), encoder-labeler deep
+LSTM (Kurata et al., 2016), and joint pointer and
+attention (Zhao and Feng, 2018), among others.
+Joint modeling approaches include CNNCRF (Xu and Sarikaya, 2013), RecNN (Guo et al.,
+2014), joint RNN-LSTM (Hakkani-Tür et al.,
+2016), attention-based BiRNN (Liu and Lane,
+2016), and slot-gated attention-based model (Goo
+et al., 2018).
+
+3
+
+Proposed Approach
+
+We first briefly describe the BERT model (Devlin
+et al., 2018) and then introduce the proposed joint
+model based on BERT. Figure 1 illustrates a highlevel view of the proposed model.
+
+PlayMusic
+
+O
+
+...
+
+I-track
+
+Trm
+
+Trm
+
+...
+
+Trm
+
+Trm
+
+Trm
+
+Trm
+
+Trm
+
+Trm
+
+...
+
+Trm
+
+Trm
+
+Trm
+
+Trm
+
+E1
+
+E2
+
+...
+
+E2
+
+ET-2
+
+ET-1
+
+ET
+
+[CLS]
+
+play
+
+...
+
+red
+
+##bre
+
+##ast
+
+[SEP]
+
+Figure 1: A high-level view of the proposed model.
+The input query is “play the song little robin redbreast”.
+
+3.1
+
+BERT
+
+The model architecture of BERT is a multi-layer
+bidirectional Transformer encoder based on the
+original Transformer model (Vaswani et al., 2017).
+The input representation is a concatenation of
+WordPiece embeddings (Wu et al., 2016), positional embeddings, and the segment embedding.
+Specially, for single sentence classification and
+tagging tasks, the segment embedding has no discrimination. A special classification embedding
+([CLS]) is inserted as the first token and a special
+token ([SEP]) is added as the final token. Given an
+input token sequence x = (x1 , . . . , xT ), the output of BERT is H = (h1 , . . . , hT ).
+The BERT model is pre-trained with two strategies on large-scale unlabeled text, i.e., masked
+language model and next sentence prediction.
+The pre-trained BERT model provides a powerful context-dependent sentence representation and
+can be used for various target tasks, i.e., intent
+classification and slot filling, through the finetuning procedure, similar to how it is used for
+other NLP tasks.
+3.2
+
+Joint Intent Classification and Slot Filling
+
+BERT can be easily extended to a joint intent classification and slot filling model. Based on the hidden state of the first special token ([CLS]), denoted
+h1 , the intent is predicted as:
+y i = softmax(Wi h1 + bi ) ,
+
+(1)
+
+For slot filling, we feed the final hidden states
+of other tokens h2 , . . . , hT into a softmax layer
+to classify over the slot filling labels. To make
+this procedure compatible with the WordPiece tokenization, we feed each tokenized input word into
+a WordPiece tokenizer and use the hidden state
+corresponding to the first sub-token as input to the
+
+Models
+RNN-LSTM (Hakkani-Tür et al., 2016)
+Atten.-BiRNN (Liu and Lane, 2016)
+Slot-Gated (Goo et al., 2018)
+Joint BERT
+Joint BERT + CRF
+
+Intent
+96.9
+96.7
+97.0
+98.6
+98.4
+
+Snips
+Slot
+87.3
+87.8
+88.8
+97.0
+96.7
+
+Sent
+73.2
+74.1
+75.5
+92.8
+92.6
+
+Intent
+92.6
+91.1
+94.1
+97.5
+97.9
+
+ATIS
+Slot
+94.3
+94.2
+95.2
+96.1
+96.0
+
+Sent
+80.7
+78.9
+82.6
+88.2
+88.6
+
+Table 2: NLU performance on Snips and ATIS datasets. The metrics are intent classification accuracy, slot filling
+F1, and sentence-level semantic frame accuracy (%). The results for the first group of models are cited from Goo
+et al. (2018).
+
+softmax classifier.
+yns = softmax(Ws hn + bs ) , n ∈ 1 . . . N
+
+(2)
+
+where hn is the hidden state corresponding to the
+first sub-token of word xn .
+To jointly model intent classification and slot
+filling, the objective is formulated as:
+p(y i , y s |x) = p(y i |x)
+
+N
+Y
+
+p(yns |x) ,
+
+(3)
+
+n=1
+
+The learning objective is to maximize the conditional probability p(y i , y s |x). The model is finetuned end-to-end via minimizing the cross-entropy
+loss.
+3.3
+
+Conditional Random Field
+
+Slot label predictions are dependent on predictions
+for surrounding words. It has been shown that
+structured prediction models can improve the slot
+filling performance, such as conditional random
+fields (CRF). Zhou and Xu (2015) improves semantic role labeling by adding a CRF layer for a
+BiLSTM encoder. Here we investigate the efficacy
+of adding CRF for modeling slot label dependencies, on top of the joint BERT model.
+
+4
+
+for the training set. We also use Snips (Coucke
+et al., 2018), which is collected from the Snips personal voice assistant. The training, development
+and test sets contain 13,084, 700 and 700 utterances, respectively. There are 72 slot labels and 7
+intent types for the training set.
+4.2
+
+We use English uncased BERT-Base model1 ,
+which has 12 layers, 768 hidden states, and 12
+heads. BERT is pre-trained on BooksCorpus
+(800M words) (Zhu et al., 2015) and English
+Wikipedia (2,500M words). For fine-tuning, all
+hyper-parameters are tuned on the development
+set. The maximum length is 50. The batch size is
+128. Adam (Kingma and Ba, 2014) is used for optimization with an initial learning rate of 5e-5. The
+dropout probability is 0.1. The maximum number
+of epochs is selected from [1, 5, 10, 20, 30, 40].
+4.3
+
+Experiments and Analysis
+
+Data
+
+The ATIS dataset (Tür et al., 2010) is widely used
+in NLU research, which includes audio recordings
+of people making flight reservations. We use the
+same data division as Goo et al. (2018) for both
+datasets. The training, development and test sets
+contain 4,478, 500 and 893 utterances, respectively. There are 120 slot labels and 21 intent types
+
+Results
+Model
+Joint BERT
+No joint
+Joint BERT
+Joint BERT
+Joint BERT
+Joint BERT
+Joint BERT
+
+We evaluate the proposed model on two public
+benchmark datasets, ATIS and Snips.
+4.1
+
+Training Details
+
+Epochs
+30
+30
+40
+20
+10
+5
+1
+
+Intent
+98.6
+98.0
+98.3
+99.0
+98.6
+98.0
+98.0
+
+Slot
+97.0
+95.8
+96.4
+96.0
+96.5
+95.1
+93.3
+
+Table 3: Ablation Analysis for the Snips dataset.
+
+Table 2 shows the model performance as slot
+filling F1, intent classification accuracy, and
+sentence-level semantic frame accuracy on the
+Snips and ATIS datasets.
+1
+
+https://github.com/google-research/bert
+
+Query need to see mother joan of the angels in one second
+Gold, predicted by joint BERT correctly
+Intent SearchScreeningEvent
+Slots
+O O O B-movie-name I-movie-name I-movie-name I-movie-name I-movie-name B-timeRange
+I-timeRange I-timeRange
+Predicted by Slot-Gated Model (Goo et al., 2018)
+Intent BookRestaurant
+Slots
+O O O B-object-name I-object-name I-object-name I-object-name I-object-name B-timeRange
+I-timeRange I-timeRange
+
+Table 4: A case in the Snips dataset.
+
+The first group of models are the baselines
+and it consists of the state-of-the-art joint intent
+classification and slot filling models: sequencebased joint model using BiLSTM (Hakkani-Tür
+et al., 2016), attention-based model (Liu and Lane,
+2016), and slot-gated model (Goo et al., 2018).
+The second group of models includes the proposed joint BERT models. As can be seen from
+Table 2, joint BERT models significantly outperform the baseline models on both datasets. On
+Snips, joint BERT achieves intent classification
+accuracy of 98.6% (from 97.0%), slot filling F1 of
+97.0% (from 88.8%), and sentence-level semantic frame accuracy of 92.8% (from 75.5%). On
+ATIS, joint BERT achieves intent classification accuracy of 97.5% (from 94.1%), slot filling F1 of
+96.1% (from 95.2%), and sentence-level semantic frame accuracy of 88.2% (from 82.6%). Joint
+BERT+CRF replaces the softmax classifier with
+CRF and it performs comparably to BERT, probably due to the self-attention mechanism in Transformer, which may have sufficiently modeled the
+label structures.
+Compared to ATIS, Snips includes multiple domains and has a larger vocabulary. For the more
+complex Snips dataset, joint BERT achieves a
+large gain in the sentence-level semantic frame
+accuracy, from 75.5% to 92.8% (22.9% relative).
+This demonstrates the strong generalization capability of joint BERT model, considering that it is
+pre-trained on large-scale text from mismatched
+domains and genres (books and wikipedia). On
+ATIS, joint BERT also achieves significant improvement on the sentence-level semantic frame
+accuracy, from 82.6% to 88.2% (6.8% relative).
+4.4
+
+Ablation Analysis and Case Study
+
+We conduct ablation analysis on Snips, as shown
+in Table 3. Without joint learning, the accuracy of intent classification drops to 98.0% (from
+
+98.6%), and the slot filling F1 drops to 95.8%
+(from 97.0%). We also compare the joint BERT
+model with different fine-tuning epochs. The joint
+BERT model fine-tuned with only 1 epoch already
+outperforms the first group of models in Table 2.
+We further select a case from Snips, as in Table 4, showing how joint BERT outperforms the
+slot-gated model (Goo et al., 2018) by exploiting
+the language representation power of BERT to improve the generalization capability. In this case,
+“mother joan of the angels” is wrongly predicted
+by the slot-gated model as an object name and
+the intent is also wrong. However, joint BERT
+correctly predicts the slot labels and intent because “mother joan of the angels” is a movie entry
+in Wikipedia. The BERT model was pre-trained
+partly on Wikipedia and possibly learned this information for this rare phrase.
+
+5
+
+Conclusion
+
+We propose a joint intent classification and slot
+filling model based on BERT, aiming at addressing
+the poor generalization capability of traditional
+NLU models. Experimental results show that our
+proposed joint BERT model outperforms BERT
+models modeling intent classification and slot filling separately, demonstrating the efficacy of exploiting the relationship between the two tasks.
+Our proposed joint BERT model achieves significant improvement on intent classification accuracy, slot filling F1, and sentence-level semantic
+frame accuracy on ATIS and Snips datasets over
+previous state-of-the-art models. Future work includes evaluations of the proposed approach on
+other large-scale and more complex NLU datasets,
+and exploring the efficacy of combining external
+knowledge with BERT.
+
+References
+Dzmitry Bahdanau, Kyunghyun Cho, and Yoshua
+Bengio. 2014.
+Neural machine translation by
+jointly learning to align and translate. CoRR,
+abs/1409.0473.
+Alice Coucke, Alaa Saade, Adrien Ball, Théodore
+Bluche, Alexandre Caulier, David Leroy, Clément
+Doumouro, Thibault Gisselbrecht, Francesco Caltagirone, Thibaut Lavril, Maël Primet, and Joseph
+Dureau. 2018. Snips voice platform: an embedded
+spoken language understanding system for privateby-design voice interfaces. CoRR, abs/1805.10190.
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and
+Kristina Toutanova. 2018. BERT: pre-training of
+deep bidirectional transformers for language understanding. CoRR, abs/1810.04805.
+Chih-Wen Goo, Guang Gao, Yun-Kai Hsu, Chih-Li
+Huo, Tsung-Chieh Chen, Keng-Wei Hsu, and YunNung Chen. 2018. Slot-gated modeling for joint slot
+filling and intent prediction. In NAACL-HLT, New
+Orleans, Louisiana, USA, June 1-6, 2018, Volume 2
+(Short Papers), pages 753–757.
+Daniel Guo, Gökhan Tür, Wen-tau Yih, and Geoffrey
+Zweig. 2014. Joint semantic utterance classification
+and slot filling with recursive neural networks. In
+2014 IEEE Spoken Language Technology Workshop,
+SLT 2014, South Lake Tahoe, NV, USA, December 710, 2014, pages 554–559.
+Dilek Hakkani-Tür, Gökhan Tür, Asli Çelikyilmaz,
+Yun-Nung Chen, Jianfeng Gao, Li Deng, and YeYi Wang. 2016. Multi-domain joint semantic frame
+parsing using bi-directional RNN-LSTM. In Interspeech 2016, San Francisco, CA, USA, September
+8-12, 2016, pages 715–719.
+Yoon Kim. 2014. Convolutional neural networks for
+sentence classification. In EMNLP 2014, October
+25-29, 2014, Doha, Qatar, A meeting of SIGDAT,
+a Special Interest Group of the ACL, pages 1746–
+1751. ACL.
+Diederik P. Kingma and Jimmy Ba. 2014.
+A method for stochastic optimization.
+abs/1412.6980.
+
+Adam:
+CoRR,
+
+Gakuto Kurata, Bing Xiang, Bowen Zhou, and Mo Yu.
+2016. Leveraging sentence-level information with
+encoder LSTM for natural language understanding.
+CoRR, abs/1601.01530.
+Bing Liu and Ian Lane. 2016. Attention-based recurrent neural network models for joint intent detection
+and slot filling. In Interspeech 2016, San Francisco,
+CA, USA, September 8-12, 2016, pages 685–689.
+Pengfei Liu, Xipeng Qiu, and Xuanjing Huang. 2017.
+Adversarial multi-task learning for text classification. In ACL 2017, Vancouver, Canada, July 30 August 4, Volume 1: Long Papers, pages 1–10. Association for Computational Linguistics.
+
+Baolin Peng, Kaisheng Yao, Li Jing, and Kam-Fai
+Wong. 2015. Recurrent neural networks with external memory for spoken language understanding.
+In NLPCC 2015, Nanchang, China, October 9-13,
+2015, Proceedings, pages 25–35.
+Matthew E. Peters, Mark Neumann, Mohit Iyyer, Matt
+Gardner, Christopher Clark, Kenton Lee, and Luke
+Zettlemoyer. 2018. Deep contextualized word representations. In NAACL-HLT 2018, New Orleans,
+Louisiana, USA, June 1-6, 2018, Volume 1 (Long Papers), pages 2227–2237.
+Alec Radford, Karthik Narasimhan, Tim Salimans, and
+Ilya Sutskever. 2018. Improving language understanding with unsupervised learning. In Technical
+report, OpenAI.
+Suman V. Ravuri and Andreas Stolcke. 2015. Recurrent neural network and LSTM models for lexical
+utterance classification. In INTERSPEECH 2015,
+Dresden, Germany, September 6-10, 2015, pages
+135–139. ISCA.
+Gökhan Tür, Dilek Hakkani-Tür, and Larry P. Heck.
+2010. What is left to be understood in atis? In 2010
+IEEE Spoken Language Technology Workshop, SLT
+2010, Berkeley, California, USA, December 12-15,
+2010, pages 19–24.
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob
+Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz
+Kaiser, and Illia Polosukhin. 2017. Attention is all
+you need. In NIPS 2017, 4-9 December 2017, Long
+Beach, CA, USA, pages 6000–6010.
+Ngoc Thang Vu. 2016. Sequential convolutional neural networks for slot filling in spoken language understanding. In Interspeech 2016, 17th Annual Conference of the International Speech Communication
+Association, San Francisco, CA, USA, September 812, 2016, pages 3250–3254. ISCA.
+Yonghui Wu, Mike Schuster, Zhifeng Chen, Quoc V.
+Le, Mohammad Norouzi, Wolfgang Macherey,
+Maxim Krikun, Yuan Cao, Qin Gao, Klaus
+Macherey, Jeff Klingner, Apurva Shah, Melvin
+Johnson, Xiaobing Liu, Lukasz Kaiser, Stephan
+Gouws, Yoshikiyo Kato, Taku Kudo, Hideto
+Kazawa, Keith Stevens, George Kurian, Nishant
+Patil, Wei Wang, Cliff Young, Jason Smith, Jason
+Riesa, Alex Rudnick, Oriol Vinyals, Greg Corrado,
+Macduff Hughes, and Jeffrey Dean. 2016. Google’s
+neural machine translation system: Bridging the gap
+between human and machine translation. CoRR,
+abs/1609.08144.
+Puyang Xu and Ruhi Sarikaya. 2013. Convolutional
+neural network based triangular CRF for joint intent detection and slot filling. In 2013 IEEE Workshop on Automatic Speech Recognition and Understanding, Olomouc, Czech Republic, December 812, 2013, pages 78–83.
+
+Zichao Yang, Diyi Yang, Chris Dyer, Xiaodong He,
+Alexander J. Smola, and Eduard H. Hovy. 2016. Hierarchical attention networks for document classification. In NAACL HLT 2016, San Diego California,
+USA, June 12-17, 2016, pages 1480–1489. The Association for Computational Linguistics.
+Kaisheng Yao, Baolin Peng, Yu Zhang, Dong Yu, Geoffrey Zweig, and Yangyang Shi. 2014. Spoken language understanding using long short-term memory
+neural networks. In 2014 IEEE Spoken Language
+Technology Workshop, SLT 2014, South Lake Tahoe,
+NV, USA, December 7-10, 2014, pages 189–194.
+Xiang Zhang, Junbo Jake Zhao, and Yann LeCun.
+2015. Character-level convolutional networks for
+text classification. In NIPS 2015, December 7-12,
+2015, Montreal, Quebec, Canada, pages 649–657.
+Lin Zhao and Zhe Feng. 2018. Improving slot filling
+in spoken language understanding with joint pointer
+and attention. In ACL 2018, Melbourne, Australia,
+July 15-20, 2018, Volume 2: Short Papers, pages
+426–431.
+Zhiwei Zhao and Youzheng Wu. 2016. Attentionbased convolutional neural networks for sentence
+classification. In Interspeech 2016, San Francisco,
+CA, USA, September 8-12, 2016, pages 705–709.
+ISCA.
+Jie Zhou and Wei Xu. 2015. End-to-end learning of
+semantic role labeling using recurrent neural networks. In ACL 2015, July 26-31, 2015, Beijing,
+China, Volume 1: Long Papers, pages 1127–1137.
+Yukun Zhu, Ryan Kiros, Richard S. Zemel, Ruslan
+Salakhutdinov, Raquel Urtasun, Antonio Torralba,
+and Sanja Fidler. 2015. Aligning books and movies:
+Towards story-like visual explanations by watching
+movies and reading books. In 2015 IEEE International Conference on Computer Vision, ICCV 2015,
+Santiago, Chile, December 7-13, 2015, pages 19–
+27.

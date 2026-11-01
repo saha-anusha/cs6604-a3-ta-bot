@@ -1,0 +1,11 @@
+# A3: The Course TA-Bot — Python dependencies
+# Install:  pip install -r requirements.txt
+
+# --- Core (needed by most TABot implementations) ---
+requests>=2.31,<3          # HTTP client for vLLM endpoint
+numpy>=1.24,<2             # Embedding math / vector similarity
+
+# --- Optional but recommended ---
+matplotlib>=3.7            # python ablation.py plot
+# sentence-transformers    # If you embed locally instead of via vLLM
+# scikit-learn             # For cosine-similarity helpers, clustering, etc.
